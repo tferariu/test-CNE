@@ -145,6 +145,7 @@ test-suite cardano-node-emulator-test
     , plutus-ledger-api                         >=1.0.0
     , plutus-tx                                 >=1.0.0
     , plutus-tx-plugin                          >=1.0.0
+    , plutus-core                               >=1.0.0
 
   ------------------------
   -- Non-IOG dependencies

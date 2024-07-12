@@ -34,6 +34,10 @@ module Plutus.Examples.MultiSig (
   Deadline,
   Label (..),
   mkValidator,
+  mkPolicy,
+  policy,
+  curSymbol,
+  mintingHash,
 
   -- * Coverage
   covIdx,
@@ -87,6 +91,9 @@ import PlutusLedgerApi.V1.Address
 import PlutusLedgerApi.V3 hiding (TxId)--(Datum (Datum))
 import PlutusLedgerApi.V3.Contexts hiding (TxId)--(valuePaidTo)
 import PlutusLedgerApi.V2.Tx hiding (TxId)--(OutputDatum (OutputDatum))
+
+
+import PlutusCore.Version (plcVersion100)
 {-
 import PlutusLedgerApi.V2.Tx (OutputDatum (OutputDatum))
 import PlutusLedgerApi.V3 (Datum (Datum))
@@ -325,6 +332,62 @@ mkAddress = validatorCardanoAddress testnet . smTypedValidator
 
 mkOtherAddress :: Params -> Address
 mkOtherAddress = V3.validatorAddress . smTypedValidator
+
+
+-- Thread Token
+{-# INLINABLE mkPolicy #-}
+mkPolicy :: Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
+mkPolicy addr oref tn () ctx = traceIfFalse "UTxO not consumed"   hasUTxO                  &&
+                          traceIfFalse "wrong amount minted" checkMintedAmount        &&
+                          traceIfFalse "not initial state" checkDatum  
+  where
+    info :: TxInfo
+    info = scriptContextTxInfo ctx
+    
+    cs :: CurrencySymbol
+    cs = ownCurrencySymbol ctx
+
+    hasUTxO :: Bool
+    hasUTxO = any (\i -> txInInfoOutRef i == oref) $ txInfoInputs info
+
+    checkMintedAmount :: Bool
+    checkMintedAmount = case flattenValue (txInfoMint info) of
+        [(_, tn', amt)] -> tn' == tn && amt == 1
+        _               -> False
+      
+    scriptOutput :: TxOut
+    scriptOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
+    	[o] -> o
+    	_ -> traceError "not unique SM output"
+    
+    checkDatum :: Bool
+    checkDatum = case txOutDatum scriptOutput of 
+        NoOutputDatum-> traceError "nd"
+        OutputDatumHash dh -> case smDatum $ findDatum dh info of
+            Nothing -> traceError "nh"
+            Just d  -> tToken d == AssetClass (cs, tn) && label d == Holding
+        OutputDatum dat -> case PlutusTx.unsafeFromBuiltinData @State (getDatum dat) of
+            d -> tToken d == AssetClass (cs, tn) && label d == Holding 
+            _ -> traceError "?"
+
+
+
+policy :: Params -> TxOutRef -> TokenName -> V3.MintingPolicy
+policy p oref tn = Ledger.mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| \addr' oref' tn' -> Scripts.mkUntypedMintingPolicy $ mkPolicy addr' oref' tn' ||])
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 (mkOtherAddress p)
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 oref
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 tn
+
+
+curSymbol :: Params -> TxOutRef -> TokenName -> CurrencySymbol
+curSymbol p oref tn = Ledger.scriptCurrencySymbol $ (Ledger.Versioned (policy p oref tn) Ledger.PlutusV2)
+
+mintingHash :: Params -> TxOutRef -> TokenName -> Ledger.MintingPolicyHash
+mintingHash p oref tn = Ledger.mintingPolicyHash $ (Ledger.Versioned (policy p oref tn) Ledger.PlutusV2)
+
+{--}
+
 
 covIdx :: CoverageIndex
 covIdx = getCovIdx $$(PlutusTx.compile [||mkValidator||])
