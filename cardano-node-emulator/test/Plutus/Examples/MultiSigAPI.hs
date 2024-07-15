@@ -154,6 +154,9 @@ mkStartTx slotConfig params v tt =
 
 
 
+
+
+
 alwaysSucceedPolicyId :: C.PolicyId
 alwaysSucceedPolicyId =
   C.scriptPolicyId
@@ -162,18 +165,23 @@ alwaysSucceedPolicyId =
 someTokenValue :: C.AssetName -> Integer -> C.Value
 someTokenValue an i = C.valueFromList [(C.AssetId alwaysSucceedPolicyId an, C.Quantity i)]
 
-mkStartTx'
+threadTokenValue :: Params -> TxOutRef -> TokenName -> C.AssetName ->  C.Value
+threadTokenValue p oref tn an = C.valueFromList [(C.AssetId (getPid p oref tn) an, C.Quantity 1)]
+
+
+mkStartTx''
   :: (E.MonadEmulator m)
   => Params
   -> Ledger.CardanoAddress
   -> Value
-  -> AssetClass
   -> m (C.CardanoBuildTx, Ledger.UtxoIndex)
-mkStartTx' params wallet v tt = do
+mkStartTx'' params wallet v = do
 
   slotConfig <- asks pSlotConfig
   unspentOutputs <- E.utxosAt wallet
+  uO <- E.utxosAtPlutus wallet
 
+  let oref = head (Map.keys uO)
   --this is probably wrong, but find some way to get a single utxo out
   
   let utxos = Map.toList (C.unUTxO unspentOutputs)
@@ -186,25 +194,25 @@ mkStartTx' params wallet v tt = do
               [] -> throwError $ E.CustomError $ "no UTxOs" 
               x:_ -> x-}
 
+  let tn = "ThreadToken"
+      an = "ThreadToken"
+      cs = curSymbol params oref tn
+      tt = assetClass cs tn
+
   let smAddress = mkAddress params
       txOut = C.TxOut smAddress (toTxOutValue v) 
               (toTxOutInlineDatum (State {label = Holding, tToken = tt})) C.ReferenceScriptNone
       validityRange = toValidityRange slotConfig $ Interval.always
 -- probably use some helper functions from https://github.com/IntersectMBO/cardano-node-emulator/blob/1e09173b74064bd5990d2d3e48af6510780ea349/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs#L55
-      scriptWitnessPlaceholder = 
-        C.PlutusScriptWitness
-          C.PlutusScriptV1InConway
-          C.PlutusScriptV1
-          (C.PScript $ C.examplePlutusScriptAlwaysSucceeds C.WitCtxMint)
-          C.NoScriptDatumForMint
-          (C.unsafeHashableScriptData $ C.fromPlutusData $ toData () )
-          C.zeroExecutionUnits
       
   --mintAmount <- toInteger <$> Gen.int (Range.linear 0 maxBound)
   --mintTokenName <- Gen.genAssetName
-  let mintValue = someTokenValue "ThreadToken" 1
+  let mintValue = threadTokenValue params oref tn an
+      mintValue2 = someTokenValue "asdf" 1
+      redeemer = Redeemer (toBuiltinData ())
   
-  let mintWitness =
+  let mintWitness = either (error . show) id $ C.toCardanoMintWitness redeemer Nothing (Just (versionedPolicy params oref tn))
+      mintWitness2 =
         C.PlutusScriptWitness
           C.PlutusScriptV1InConway
           C.PlutusScriptV1
@@ -212,11 +220,16 @@ mkStartTx' params wallet v tt = do
           C.NoScriptDatumForMint
           (C.unsafeHashableScriptData $ C.fromPlutusData $ toData () )
           C.zeroExecutionUnits
-  let txMintValue =
+  let txMintValue = 
         C.TxMintValue
           C.MaryEraOnwardsConway
           (mintValue)
-          (C.BuildTxWith (Map.singleton alwaysSucceedPolicyId mintWitness))  
+          (C.BuildTxWith (Map.singleton (getPid params oref tn) mintWitness))  
+      txMintValue2 =
+        C.TxMintValue
+          C.MaryEraOnwardsConway
+          (mintValue2)
+          (C.BuildTxWith (Map.singleton alwaysSucceedPolicyId mintWitness2))  
 	  
       {-placeholder = Map.singleton (Ledger.policyId 
                     (Ledger.Versioned (policy params (C.fromCardanoTxIn (fst utxo)) "ThreadToken") Ledger.PlutusV2)) 
@@ -225,15 +238,79 @@ mkStartTx' params wallet v tt = do
       utx =
         E.emptyTxBodyContent
           { C.txOuts = [txOut]
-          --, C.txMintValue = mint
+          --, C.txMintValue = txMintValue2
+          , C.txValidityLowerBound = fst validityRange
+          , C.txValidityUpperBound = snd validityRange
+          }
+      utxoIndex = mempty
+   in pure (C.CardanoBuildTx utx, utxoIndex)
+   
+mkStartTx'
+  :: (E.MonadEmulator m)
+  => Params
+  -> Ledger.CardanoAddress
+  -> Value
+  -> AssetClass
+  -> m (C.CardanoBuildTx, Ledger.UtxoIndex)
+mkStartTx' params wallet v tt = do
+
+  slotConfig <- asks pSlotConfig
+  unspentOutputs <- E.utxosAt wallet
+
+  let smAddress = mkAddress params
+      txOut = C.TxOut smAddress (toTxOutValue v) 
+              (toTxOutInlineDatum (State {label = Holding, tToken = tt})) C.ReferenceScriptNone
+      validityRange = toValidityRange slotConfig $ Interval.always
+-- probably use some helper functions from https://github.com/IntersectMBO/cardano-node-emulator/blob/1e09173b74064bd5990d2d3e48af6510780ea349/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs#L55
+      
+  --mintAmount <- toInteger <$> Gen.int (Range.linear 0 maxBound)
+  --mintTokenName <- Gen.genAssetName
+  let mintValue2 = someTokenValue "asdf" 1
+  
+  let mintWitness2 =
+        C.PlutusScriptWitness
+          C.PlutusScriptV1InConway
+          C.PlutusScriptV1
+          (C.PScript $ C.examplePlutusScriptAlwaysSucceeds C.WitCtxMint)
+          C.NoScriptDatumForMint
+          (C.unsafeHashableScriptData $ C.fromPlutusData $ toData () )
+          C.zeroExecutionUnits
+  let txMintValue2 =
+        C.TxMintValue
+          C.MaryEraOnwardsConway
+          (mintValue2)
+          (C.BuildTxWith (Map.singleton alwaysSucceedPolicyId mintWitness2))  
+	  
+      {-placeholder = Map.singleton (Ledger.policyId 
+                    (Ledger.Versioned (policy params (C.fromCardanoTxIn (fst utxo)) "ThreadToken") Ledger.PlutusV2)) 
+                    scriptWitnessPlaceholder-}
+      --mint = C.TxMintValue C.MaryEraOnwardsConway (toLedgerValue (assetClassValue tt 1)) (C.BuildTxWith placeholder)
+      utx =
+        E.emptyTxBodyContent
+          { C.txOuts = [txOut]
+          , C.txMintValue = txMintValue2
           , C.txValidityLowerBound = fst validityRange
           , C.txValidityUpperBound = snd validityRange
           }
       utxoIndex = mempty
    in pure (C.CardanoBuildTx utx, utxoIndex)
 
-
-
+{-
+mkStartTx
+  :: SlotConfig
+  -> Params
+  -> Value
+  -> AssetClass
+  -> (C.CardanoBuildTx, Ledger.UtxoIndex)
+  
+  mkStartTx'
+  :: (E.MonadEmulator m)
+  => Params
+  -> Ledger.CardanoAddress
+  -> Value
+  -> AssetClass
+  -> m (C.CardanoBuildTx, Ledger.UtxoIndex)-}
+  
 start
   :: (E.MonadEmulator m)
   => Ledger.CardanoAddress
@@ -245,10 +322,26 @@ start
 start wallet privateKey params v tt = do
   E.logInfo @String $ "Starting"
   slotConfig <- asks pSlotConfig
-  let (utx, utxoIndex) = mkStartTx slotConfig params v tt
+  (utx, utxoIndex) <- mkStartTx' params wallet v tt
+  --let (utx, utxoIndex) = mkStartTx slotConfig params v tt
   void $ E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx
 
 
+{-
+propose
+  :: (E.MonadEmulator m)
+  => Ledger.CardanoAddress
+  -> Ledger.PaymentPrivateKey
+  -> Params
+  -> Value
+  -> PaymentPubKeyHash
+  -> Deadline
+  -> AssetClass
+  -> m TxSuccess
+propose wallet privateKey params val pkh d tt = do
+  E.logInfo @String "Proposing"
+  (utx, utxoIndex) <- mkProposeTx params val pkh d tt
+  TxSuccess . getCardanoTxId <$> E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx-}
 
 newtype TxSuccess = TxSuccess TxId
   deriving (Eq, Show)

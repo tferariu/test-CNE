@@ -36,8 +36,10 @@ module Plutus.Examples.MultiSig (
   mkValidator,
   mkPolicy,
   policy,
+  versionedPolicy,
   curSymbol,
   mintingHash,
+  getPid,
 
   -- * Coverage
   covIdx,
@@ -84,6 +86,7 @@ import Plutus.Script.Utils.V3.Contexts (
   txSignedBy,
  )
 import Plutus.Script.Utils.V3.Typed.Scripts qualified as V3
+import Plutus.Script.Utils.V3.Scripts qualified as V3
 import Plutus.Script.Utils.Value --(Value, geq, lt)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 
@@ -380,11 +383,23 @@ policy p oref tn = Ledger.mkMintingPolicyScript $
     `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 tn
 
 
+versionedPolicy :: Params -> TxOutRef -> TokenName -> Scripts.Versioned V3.MintingPolicy
+versionedPolicy p oref tn = (Ledger.Versioned (policy p oref tn) Ledger.PlutusV3)
+
 curSymbol :: Params -> TxOutRef -> TokenName -> CurrencySymbol
-curSymbol p oref tn = Ledger.scriptCurrencySymbol $ (Ledger.Versioned (policy p oref tn) Ledger.PlutusV2)
+curSymbol p oref tn = Ledger.scriptCurrencySymbol (versionedPolicy p oref tn)
 
 mintingHash :: Params -> TxOutRef -> TokenName -> Ledger.MintingPolicyHash
-mintingHash p oref tn = Ledger.mintingPolicyHash $ (Ledger.Versioned (policy p oref tn) Ledger.PlutusV2)
+mintingHash p oref tn = Ledger.mintingPolicyHash (versionedPolicy p oref tn)
+
+getPid :: Params -> TxOutRef -> TokenName -> Ledger.PolicyId
+getPid p oref tn = Ledger.policyId (versionedPolicy p oref tn)
+
+--policyId :: V3.MintingPolicy -> Ledger.PolicyId
+--policyId (Ledger.MintingPolicy mp) = C.scriptPolicyId (V3.toCardanoApiScript mp)
+
+--policyID :: Params -> TxOutRef -> TokenName -> Ledger.PolicyId
+--policyID p oref tn = Ledger.policyId (policy p oref tn)
 
 {--}
 
