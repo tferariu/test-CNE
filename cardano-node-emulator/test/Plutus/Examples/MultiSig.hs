@@ -94,7 +94,7 @@ import PlutusLedgerApi.V1.Address
 import PlutusLedgerApi.V3 hiding (TxId)--(Datum (Datum))
 import PlutusLedgerApi.V3.Contexts hiding (TxId)--(valuePaidTo)
 import PlutusLedgerApi.V2.Tx hiding (TxId)--(OutputDatum (OutputDatum))
-
+-- do v3..?
 
 import PlutusCore.Version (plcVersion100)
 {-
@@ -386,11 +386,17 @@ policy p oref tn = Ledger.mkMintingPolicyScript $
 versionedPolicy :: Params -> TxOutRef -> TokenName -> Scripts.Versioned V3.MintingPolicy
 versionedPolicy p oref tn = (Ledger.Versioned (policy p oref tn) Ledger.PlutusV3)
 
+curSymbol' :: Params -> TxOutRef -> TokenName -> CurrencySymbol
+curSymbol' p oref tn = Ledger.scriptCurrencySymbol (versionedPolicy p oref tn)
+
 curSymbol :: Params -> TxOutRef -> TokenName -> CurrencySymbol
-curSymbol p oref tn = Ledger.scriptCurrencySymbol (versionedPolicy p oref tn)
+curSymbol p oref tn = V3.scriptCurrencySymbol (policy p oref tn)
+
+mintingHash' :: Params -> TxOutRef -> TokenName -> Ledger.MintingPolicyHash
+mintingHash' p oref tn = Ledger.mintingPolicyHash (versionedPolicy p oref tn)
 
 mintingHash :: Params -> TxOutRef -> TokenName -> Ledger.MintingPolicyHash
-mintingHash p oref tn = Ledger.mintingPolicyHash (versionedPolicy p oref tn)
+mintingHash p oref tn = V3.mintingPolicyHash (policy p oref tn)
 
 getPid :: Params -> TxOutRef -> TokenName -> Ledger.PolicyId
 getPid p oref tn = Ledger.policyId (versionedPolicy p oref tn)
