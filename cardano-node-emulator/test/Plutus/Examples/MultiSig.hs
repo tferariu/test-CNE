@@ -382,6 +382,12 @@ policy p oref tn = Ledger.mkMintingPolicyScript $
     `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 oref
     `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 tn
 
+{-
+mScript :: Params -> TxOutRef -> TokenName -> SerialisedScript
+mScript p oref tn = $$(PlutusTx.compile [|| \addr' oref' tn' -> mkPolicy addr' oref' tn' ||])
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 (mkOtherAddress p)
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 oref
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 tn -}
 
 versionedPolicy :: Params -> TxOutRef -> TokenName -> Scripts.Versioned V3.MintingPolicy
 versionedPolicy p oref tn = (Ledger.Versioned (policy p oref tn) Ledger.PlutusV3)

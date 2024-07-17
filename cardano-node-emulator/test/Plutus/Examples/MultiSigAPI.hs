@@ -222,6 +222,9 @@ mkStartTx'' params wallet v tt = do
       mintValue2 = someTokenValue "asdf" 1
       redeemer = Redeemer (toBuiltinData ())
   
+  -- PlutusScriptWitness :: forall lang era witctx. ScriptLanguageInEra lang era -> PlutusScriptVersion lang -> PlutusScriptOrReferenceInput lang -> 
+	-- ScriptDatum witctx -> ScriptRedeemer -> ExecutionUnits -> ScriptWitness witctx era	
+  
   let mintWitness = either (error . show) id $ C.toCardanoMintWitness redeemer Nothing (Just (versionedPolicy params oref tn))
       mintWitness' = either (error . show) id $ C.toCardanoMintWitness redeemer Nothing (Just (Ledger.Versioned alwaysSucceedPolicy Ledger.PlutusV1))
       mintWitness2 =
@@ -236,7 +239,11 @@ mkStartTx'' params wallet v tt = do
         C.PlutusScriptWitness
           C.PlutusScriptV1InConway
           C.PlutusScriptV1
-          (C.PScript $ Script.toCardanoApiScript (policy params oref tn))
+		  
+		  (C.PScript $ C.PlutusScriptSerialised (Ledger.unScript (Ledger.getMintingPolicy (policy params oref tn))))
+		  
+          --(C.PScript $ Ledger.unScript (Ledger.getMintingPolicy (policy params oref tn)))
+          --(C.PScript $ Script.toCardanoApiScript (policy params oref tn))
           C.NoScriptDatumForMint
           (C.unsafeHashableScriptData $ C.fromPlutusData $ toData () )
           C.zeroExecutionUnits
@@ -255,7 +262,15 @@ mkStartTx'' params wallet v tt = do
           C.MaryEraOnwardsConway
           (mintValue2)
           (C.BuildTxWith (Map.singleton alwaysSucceedPolicyId mintWitness2))  
-	  
+      txMintValue3 =
+        C.TxMintValue
+          C.MaryEraOnwardsConway
+          (mintValue)
+          (C.BuildTxWith (Map.singleton (getPid params oref tn) mintWitness))  
+	
+
+--TxMintValue :: forall era build. MaryEraOnwards era -> Value -> BuildTxWith build (Map PolicyId (ScriptWitness WitCtxMint era)) -> TxMintValue build era	
+
       {-placeholder = Map.singleton (Ledger.policyId 
                     (Ledger.Versioned (policy params (C.fromCardanoTxIn (fst utxo)) "ThreadToken") Ledger.PlutusV2)) 
                     scriptWitnessPlaceholder-}
@@ -263,7 +278,7 @@ mkStartTx'' params wallet v tt = do
       utx =
         E.emptyTxBodyContent
           { --C.txOuts = [txOut]
-           C.txMintValue = txMintValue2
+           C.txMintValue = txMintValue3
           , C.txValidityLowerBound = fst validityRange
           , C.txValidityUpperBound = snd validityRange
           }
