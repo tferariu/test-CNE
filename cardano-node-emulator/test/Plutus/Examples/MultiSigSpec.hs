@@ -67,7 +67,7 @@ import Ledger.Tx.CardanoAPI (fromCardanoSlotNo)
 import Ledger.Typed.Scripts qualified as Scripts
 import Ledger.Value.CardanoAPI qualified as Value
 import Plutus.Script.Utils.Ada qualified as Ada
-import Plutus.Script.Utils.Value (Value, geq, TokenName, AssetClass, CurrencySymbol, assetClass, valueOf, assetClassValue)
+import Plutus.Script.Utils.Value (Value, geq, TokenName (..), AssetClass (..), CurrencySymbol (..), assetClass, valueOf, assetClassValue)
 import PlutusLedgerApi.V1.Time (POSIXTime)
 
 import Plutus.Examples.MultiSig hiding (Input(..), Label(..))
@@ -142,6 +142,8 @@ import Test.Tasty.QuickCheck (
   chooseInteger,
  )
 
+import PlutusTx.Builtins qualified as Builtins
+import Cardano.Api qualified as API
 
 
 curr2 :: CurrencySymbol
@@ -212,6 +214,9 @@ ReferenceScriptNone)]}"
 tt :: AssetClass
 tt = assetClass curr tn
 
+makeTT :: Ledger.TxOutRef -> AssetClass
+makeTT oref = assetClass (curSymbol modelParams oref tn) tn
+
 
 data Phase = Initial
            | Holding
@@ -222,7 +227,7 @@ data MultiSigModel = MultiSigModel
   { _actualValue :: Value
   , _allowedSignatories :: [Wallet] 
   , _requiredSignatories :: Integer
-  , _threadToken :: AssetClass
+  , _threadToken :: Maybe QCCM.SymToken --AssetClass
   , _phase :: Phase
   , _paymentValue :: Value
   , _paymentTarget :: Maybe Wallet
@@ -259,7 +264,7 @@ instance ContractModel MultiSigModel where
     | Add Wallet
     | Pay Wallet
     | Cancel Wallet
-    | Start Wallet Value AssetClass
+    | Start Wallet Value
     deriving (Eq, Show, Generic)
 
   initialState =
@@ -267,7 +272,7 @@ instance ContractModel MultiSigModel where
       { _actualValue = mempty 
       , _allowedSignatories = [w5, w3, w4]
 	  , _requiredSignatories = (nr modelParams)
-      , _threadToken = tt --AssetClass (adaSymbol, adaToken)
+      , _threadToken = Nothing --tt --AssetClass (adaSymbol, adaToken)
       , _phase = Initial
       , _paymentValue = mempty
       , _paymentTarget = Nothing
@@ -317,11 +322,12 @@ instance ContractModel MultiSigModel where
       paymentValue .= mempty
       deadline .= Nothing
       wait 1
-    Start w v tt' -> do
+    Start w v -> do
       phase .= Holding
       withdraw (walletAddress w) (v ) -- <> (assetClassValue tt 1))
       actualValue .= v
-      threadToken .= tt'
+      symToken <- QCCM.createToken "thread token"
+      threadToken .= Just symToken
       wait 1
 
 
@@ -331,7 +337,7 @@ instance ContractModel MultiSigModel where
 			Add w -> currentPhase == Collecting && (elem w sigs) -- && not (elem w actualSigs)
 			Pay w -> currentPhase == Collecting && ((length actualSigs) >= (fromIntegral min))
 			Cancel w -> currentPhase == Collecting && ((d + 2000) < timeInt)
-			Start w v tt' -> currentPhase == Initial
+			Start w v -> currentPhase == Initial
 		where 
 		currentPhase = s ^. contractState . phase
 		currentValue = s ^. contractState . actualValue
@@ -378,8 +384,7 @@ instance ContractModel MultiSigModel where
 							    , (1, Cancel <$> genWallet)
 							    , (1, Start <$> genWallet
 										    <*> (Ada.lovelaceValueOf
-                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 1000000000000))
-											<*> genTT)
+                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 1000000000000)))
 								]
 		where
 			amount   = s ^. contractState . actualValue
@@ -393,20 +398,6 @@ instance ContractModel MultiSigModel where
 
 {-instance RunModel MultiSigModel E.EmulatorM where
   perform _ cmd _ = lift $ void $ act cmd-}
-
-instance RunModel MultiSigModel E.EmulatorM where
-  perform _ cmd _ = lift $ act cmd
-  
-  
-currC :: Value.PolicyId
-currC = PolicyId {unPolicyId = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" }
-
-tnC :: Value.AssetName
-tnC = AssetName "OtherToken"
-
-defInitialDist :: Map Ledger.CardanoAddress Value.Value
-defInitialDist = Map.fromList $ (, (Value.lovelaceValueOf 99999900000000000 <> 
-                 Value.singleton currC tnC 1)) <$> E.knownAddresses
 
 
 act :: Action MultiSigModel -> E.EmulatorM ()
@@ -442,13 +433,123 @@ act = \case
         (walletPrivateKey w)
         modelParams
         tt
+  Start w v ->
+    void $
+      start
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        v
+
+
+
+toAssetId :: AssetClass -> API.AssetId
+toAssetId (AssetClass (sym, tok))
+  | sym == Ada.adaSymbol, tok == Ada.adaToken = API.AdaAssetId
+  | otherwise                                 = API.AssetId (toPolicyId sym) (toAssetName tok)
+
+toPolicyId :: CurrencySymbol -> API.PolicyId
+toPolicyId sym@(CurrencySymbol bs) = either (error . show) API.PolicyId 
+		(API.deserialiseFromRawBytes API.AsScriptHash (Builtins.fromBuiltin bs))
+{-
+  | Just hash <- API.deserialiseFromRawBytes API.AsScriptHash
+                                                    (Builtins.fromBuiltin bs) = API.PolicyId hash
+  | otherwise = error $ "Bad policy id: " ++ show sym-}
+
+toAssetName :: TokenName -> API.AssetName
+toAssetName (TokenName bs) = API.AssetName $ Builtins.fromBuiltin bs
+
+
+fromAssetId :: API.AssetId -> AssetClass
+fromAssetId API.AdaAssetId            = AssetClass (Ada.adaSymbol, Ada.adaToken)
+fromAssetId (API.AssetId policy name) = AssetClass (fromPolicyId policy, fromAssetName name)
+
+fromPolicyId :: API.PolicyId -> CurrencySymbol
+fromPolicyId (API.PolicyId hash) = CurrencySymbol . Builtins.toBuiltin $ API.serialiseToRawBytes hash
+
+fromAssetName :: API.AssetName -> TokenName
+fromAssetName (API.AssetName bs) = TokenName $ Builtins.toBuiltin bs
+
+
+instance RunModel MultiSigModel E.EmulatorM where
+--  perform _ cmd _ = lift $ act cmd
+
+  perform s (Start w v) translate = do
+	  oref <- lift $ start (walletAddress w) (walletPrivateKey w) modelParams v 
+	  QCCM.registerToken "thread token" (toAssetId (makeTT oref)) --(toAssetId tt)  --(makeTT (head (Map.keys (E.utxosAtPlutus (walletAddress w))))))
+  
+ 	
+  perform s (Propose w1 v w2 d) translate = void $ do 
+    let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
+    lift $ propose
+        (walletAddress w1)
+        (walletPrivateKey w1)
+        modelParams
+        v
+        (walletPaymentPubKeyHash w2)
+        d
+        ttref
+  perform s (Add w) translate = void $ do 
+    let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
+    lift $ add
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        ttref
+  perform s (Pay w) translate = void $ do 
+    let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
+    lift $ pay
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        ttref
+  perform s (Cancel w) translate = void $ do 
+    let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
+    lift $ cancel
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        ttref
+	
+
+ 
+ {-
+  void $ do
+    let mref = translate <$> s ^. contractState . txIn
+        lotto = s ^. contractState . value
+        sealPolicy = TScripts.Versioned (Lib.mkMintingPolicy Lotto.script) TScripts.PlutusV2
+        currency = L.scriptCurrencySymbol sealPolicy
+    (ref, txout, tname) <- Lotto.mintSeal (Plutus.fromCardanoTxIn $ fromJust mref)
+                                          (Ada.adaValueOf $ fromInteger lotto)
+    registerTxIn "Lotto txIn"  (toTxIn ref)
+    registerToken "threadToken" (toAssetId (assetClass currency tname))  
+
   Start w v tt ->
       start
         (walletAddress w)
         (walletPrivateKey w)
         modelParams
         v
-        tt
+		
+perform _ Offer _ = void $ do
+    ref <- Auction.txOffer (wallet 1) (banana 1) 30_000_000
+    registerTxIn "auction txIn" (toTxIn ref)
+  perform s Hammer translate = void $ do
+    let mref = translate <$> s ^. contractState . txIn
+    Auction.txHammer (wallet 1) (Plutus.fromCardanoTxIn $ fromJust mref)-}
+ 
+currC :: Value.PolicyId
+currC = PolicyId {unPolicyId = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" }
+
+tnC :: Value.AssetName
+tnC = AssetName "OtherToken"
+
+defInitialDist :: Map Ledger.CardanoAddress Value.Value
+defInitialDist = Map.fromList $ (, (Value.lovelaceValueOf 99999900000000000 <> 
+                 Value.singleton currC tnC 1)) <$> E.knownAddresses
+
+
+
   
 --createToken
 --registerSymToken -?
@@ -472,7 +573,7 @@ prop_Escrow_DoubleSatisfaction = E.checkDoubleSatisfactionWithOptions options
 
 simpleVestTest :: DL MultiSigModel ()
 simpleVestTest = do
-          action $ Start 1 (Ada.adaValueOf 100) tt
+          action $ Start 1 (Ada.adaValueOf 100)
           action $ Propose 2 (Ada.adaValueOf 10) 3 111111111111111111111111111
           action $ Add 4
           action $ Add 4
@@ -577,7 +678,7 @@ tests =
         ( hasValidatedTransactionCountOfTotal 1 1 
             .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
 		  
     , checkPredicateOptions
         options
@@ -588,7 +689,7 @@ tests =
             .&&. walletFundsChange (walletAddress w2) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
           --act $ Start 2 (Ada.adaValueOf 100 <> (assetClassValue tt 1))
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
     , checkPredicateOptions
@@ -600,7 +701,7 @@ tests =
             -- .&&. walletFundsChange (walletAddress w3) mempty
         
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 4
           act $ Add 5
@@ -613,7 +714,7 @@ tests =
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 5
           act $ Add 4
@@ -627,7 +728,7 @@ tests =
             -- .&&. walletFundsChange (walletAddress w3) mempty
         
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
           act $ Propose 2 (Ada.adaValueOf 10) 3 1596059095001
           act $ Add 4
           act $ Add 4
@@ -644,7 +745,7 @@ tests =
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) tt
+          act $ Start 1 (Ada.adaValueOf 100) 
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 4
           act $ Add 5

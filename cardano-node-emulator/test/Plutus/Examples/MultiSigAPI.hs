@@ -26,7 +26,7 @@ module Plutus.Examples.MultiSigAPI (
   cancel,
   start,
   TxSuccess (..),
-  mkStartTx',
+  --mkStartTx',
 
 ) where
 
@@ -137,26 +137,6 @@ mkTxOutput = \case
       (toTxOutInlineDatum ds)
       C.ReferenceScriptNone-}
 
-mkStartTx
-  :: SlotConfig
-  -> Params
-  -> Value
-  -> AssetClass
-  -> (C.CardanoBuildTx, Ledger.UtxoIndex)
-mkStartTx slotConfig params v tt =
-  let smAddress = mkAddress params
-      txOut = C.TxOut smAddress (toTxOutValue (v <> assetClassValue tt 1)) 
-              (toTxOutInlineDatum (State {label = Holding, tToken = tt})) C.ReferenceScriptNone
-      validityRange = toValidityRange slotConfig $ Interval.always
-      utx =
-        E.emptyTxBodyContent
-          { C.txOuts = [txOut]
-          , C.txValidityLowerBound = fst validityRange
-          , C.txValidityUpperBound = snd validityRange
-          }
-      utxoIndex = mempty
-   in (C.CardanoBuildTx utx, utxoIndex)
-
 
 
 
@@ -178,14 +158,14 @@ threadTokenValue p oref tn an = C.valueFromList [(C.AssetId (getPid p oref tn) a
 curSymbol2 :: CurrencySymbol
 curSymbol2 = transPolicyID alwaysSucceedPolicyId-}
 
-mkStartTx''
+mkStartTx
   :: (E.MonadEmulator m)
   => Params
   -> Ledger.CardanoAddress
   -> Value
-  -> AssetClass
-  -> m (C.CardanoBuildTx, Ledger.UtxoIndex)
-mkStartTx'' params wallet v tt = do
+ -- -> AssetClass
+  -> m (C.CardanoBuildTx, Ledger.UtxoIndex, TxOutRef)
+mkStartTx params wallet v = do
 
   slotConfig <- asks pSlotConfig
   unspentOutputs <- E.utxosAt wallet
@@ -283,8 +263,76 @@ mkStartTx'' params wallet v tt = do
           , C.txValidityUpperBound = snd validityRange
           }
       utxoIndex = mempty
-   in pure (C.CardanoBuildTx utx, utxoIndex)
-   
+   in pure (C.CardanoBuildTx utx, utxoIndex, oref)
+ 
+
+
+
+{-
+mkStartTx
+  :: SlotConfig
+  -> Params
+  -> Value
+  -> AssetClass
+  -> (C.CardanoBuildTx, Ledger.UtxoIndex)
+  
+  mkStartTx'
+  :: (E.MonadEmulator m)
+  => Params
+  -> Ledger.CardanoAddress
+  -> Value
+  -> AssetClass
+  -> m (C.CardanoBuildTx, Ledger.UtxoIndex)-}
+
+
+newtype TxSuccess = TxSuccess TxId
+  deriving (Eq, Show)
+
+
+newtype StartSuccess = StartSuccess TxOutRef
+  deriving (Eq, Show)
+
+start
+  :: (E.MonadEmulator m)
+  => Ledger.CardanoAddress
+  -> Ledger.PaymentPrivateKey
+  -> Params
+  -> Value
+ -- -> AssetClass
+  -> m TxOutRef
+start wallet privateKey params v = do
+  E.logInfo @String $ "Starting"
+  --slotConfig <- asks pSlotConfig
+  (utx, utxoIndex, oref) <- mkStartTx params wallet v
+  --let (utx, utxoIndex) = mkStartTx slotConfig params v tt
+  --TxSuccess . getCardanoTxId <$> E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx
+  void $ E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx
+  return oref
+
+
+{-
+mkStartTx
+  :: SlotConfig
+  -> Params
+  -> Value
+  -> AssetClass
+  -> (C.CardanoBuildTx, Ledger.UtxoIndex)
+mkStartTx slotConfig params v tt =	
+  let smAddress = mkAddress params
+      txOut = C.TxOut smAddress (toTxOutValue (v <> assetClassValue tt 1)) 
+              (toTxOutInlineDatum (State {label = Holding, tToken = tt})) C.ReferenceScriptNone
+      validityRange = toValidityRange slotConfig $ Interval.always
+      utx =
+        E.emptyTxBodyContent
+          { C.txOuts = [txOut]
+          , C.txValidityLowerBound = fst validityRange
+          , C.txValidityUpperBound = snd validityRange
+          }
+      utxoIndex = mempty
+   in (C.CardanoBuildTx utx, utxoIndex)
+
+
+ 
 mkStartTx'
   :: (E.MonadEmulator m)
   => Params
@@ -336,38 +384,7 @@ mkStartTx' params wallet v tt = do
           }
       utxoIndex = mempty
    in pure (C.CardanoBuildTx utx, utxoIndex)
-
-{-
-mkStartTx
-  :: SlotConfig
-  -> Params
-  -> Value
-  -> AssetClass
-  -> (C.CardanoBuildTx, Ledger.UtxoIndex)
-  
-  mkStartTx'
-  :: (E.MonadEmulator m)
-  => Params
-  -> Ledger.CardanoAddress
-  -> Value
-  -> AssetClass
-  -> m (C.CardanoBuildTx, Ledger.UtxoIndex)-}
-  
-start
-  :: (E.MonadEmulator m)
-  => Ledger.CardanoAddress
-  -> Ledger.PaymentPrivateKey
-  -> Params
-  -> Value
-  -> AssetClass
-  -> m ()
-start wallet privateKey params v tt = do
-  E.logInfo @String $ "Starting"
-  slotConfig <- asks pSlotConfig
-  (utx, utxoIndex) <- mkStartTx'' params wallet v tt
-  --let (utx, utxoIndex) = mkStartTx slotConfig params v tt
-  void $ E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx
-
+-}
 
 {-
 propose
@@ -385,8 +402,6 @@ propose wallet privateKey params val pkh d tt = do
   (utx, utxoIndex) <- mkProposeTx params val pkh d tt
   TxSuccess . getCardanoTxId <$> E.submitTxConfirmed utxoIndex wallet [toWitness privateKey] utx-}
 
-newtype TxSuccess = TxSuccess TxId
-  deriving (Eq, Show)
 
 mkProposeTx
   :: (E.MonadEmulator m)
