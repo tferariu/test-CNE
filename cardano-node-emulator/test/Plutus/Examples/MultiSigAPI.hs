@@ -210,7 +210,7 @@ mkStartTx'' params wallet v tt = do
       tt = assetClass cs tn
 
   let smAddress = mkAddress params
-      txOut = C.TxOut smAddress (toTxOutValue v) 
+      txOut = C.TxOut smAddress (toTxOutValue (v <> assetClassValue tt 1)) 
               (toTxOutInlineDatum (State {label = Holding, tToken = tt})) C.ReferenceScriptNone
       validityRange = toValidityRange slotConfig $ Interval.always
 -- probably use some helper functions from https://github.com/IntersectMBO/cardano-node-emulator/blob/1e09173b74064bd5990d2d3e48af6510780ea349/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs#L55
@@ -277,8 +277,8 @@ mkStartTx'' params wallet v tt = do
       --mint = C.TxMintValue C.MaryEraOnwardsConway (toLedgerValue (assetClassValue tt 1)) (C.BuildTxWith placeholder)
       utx =
         E.emptyTxBodyContent
-          { --C.txOuts = [txOut]
-           C.txMintValue = txMintValue3
+          { C.txOuts = [txOut]
+          , C.txMintValue = txMintValue3
           , C.txValidityLowerBound = fst validityRange
           , C.txValidityUpperBound = snd validityRange
           }
@@ -410,7 +410,9 @@ mkProposeTx params val pkh d tt = do
   {-when (length (validUnspentOutputs') /= 1)
     $ throwError $ E.CustomError $ "not SM" -}
   when (length (validUnspentOutputs') == 0)
-    $ throwError $ E.CustomError $ ("found no SM but: " ++ (show unspentOutputs))
+    $ throwError $ E.CustomError $ ("found no SM but: " ++ (show unspentOutputs)) 
+	{-( show (map (\(C.TxOut _aie tov _tod _rs) -> 
+            tov ) $ Map.elems (C.unUTxO unspentOutputs) )))-}
   when (length (validUnspentOutputs') > 1)
     $ throwError $ E.CustomError $ "found too many SM"
   let

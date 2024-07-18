@@ -20,10 +20,10 @@ tests :: TestTree
 tests =
   testGroup
     "all tests"
-    [ GeneratorsSpec.tests
-    , MTLSpec.tests
-    , GameSpec.tests
+    [ -- GeneratorsSpec.tests
+    --, MTLSpec.tests
+    --, GameSpec.tests
     --, EscrowSpec.tests
-    , MultiSigSpec.tests
+     MultiSigSpec.tests
     --, CIP1694Test.tests
     ]

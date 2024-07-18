@@ -96,7 +96,7 @@ import PlutusLedgerApi.V3.Contexts hiding (TxId)--(valuePaidTo)
 import PlutusLedgerApi.V2.Tx hiding (TxId)--(OutputDatum (OutputDatum))
 -- do v3..?
 
-import PlutusCore.Version (plcVersion100)
+import PlutusCore.Version (plcVersion110)
 {-
 import PlutusLedgerApi.V2.Tx (OutputDatum (OutputDatum))
 import PlutusLedgerApi.V3 (Datum (Datum))
@@ -378,9 +378,9 @@ mkPolicy addr oref tn () ctx = traceIfFalse "UTxO not consumed"   hasUTxO       
 policy :: Params -> TxOutRef -> TokenName -> V3.MintingPolicy
 policy p oref tn = Ledger.mkMintingPolicyScript $
     $$(PlutusTx.compile [|| \addr' oref' tn' -> Scripts.mkUntypedMintingPolicy $ mkPolicy addr' oref' tn' ||])
-    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 (mkOtherAddress p)
-    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 oref
-    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion100 tn
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion110 (mkOtherAddress p)
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion110 oref
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion110 tn
 
 {-
 mScript :: Params -> TxOutRef -> TokenName -> SerialisedScript

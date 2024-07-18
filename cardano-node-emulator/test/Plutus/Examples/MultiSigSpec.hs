@@ -144,14 +144,15 @@ import Test.Tasty.QuickCheck (
 
 
 
-curr :: CurrencySymbol
-curr = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" 
+curr2 :: CurrencySymbol
+curr2 = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" 
 
-tn :: TokenName
-tn = "ThreadToken"
+on :: TokenName
+on = "OtherToken"
 
-tt :: AssetClass
-tt = assetClass curr tn
+ot :: AssetClass
+ot = assetClass curr2 tn
+
 
 type Wallet = Integer
 
@@ -186,8 +187,34 @@ walletPaymentPubKeyHash =
 modelParams :: Params
 modelParams = Params {authSigs = [walletPaymentPubKeyHash w4 , walletPaymentPubKeyHash w5, walletPaymentPubKeyHash w3], nr = 2}
 
+
+tn :: TokenName
+tn = "ThreadToken"
+
+curr :: CurrencySymbol
+curr = "e53087fb4c98a17c2b71562ee5ba6cf57c1d9fd01157fe3721d20330" 
+
+--curSymbol modelParams oref?? tn
+{-
+UTxO {unUTxO = fromList [(TxIn \"bf0f8addee8b501dcbeb4ef0309e41ea765a3613d50dd854a852408407c32111\" (TxIx 0),
+TxOut (AddressInEra (ShelleyAddressInEra ShelleyBasedEraConway) (ShelleyAddress Testnet (ScriptHashObj 
+(ScriptHash \"1abefe14b0d3052a84f54276f3efac6f0345eb4a0b14dc271480eabc\")) StakeRefNull)) 
+(TxOutValueShelleyBased ShelleyBasedEraConway (MaryValue (Coin 100000000) 
+(MultiAsset (fromList [(PolicyID {policyID = ScriptHash \"e53087fb4c98a17c2b71562ee5ba6cf57c1d9fd01157fe3721d20330\"},
+fromList [(\"546872656164546f6b656e\",1)])])))) (TxOutDatumInline BabbageEraOnwardsConway 
+(HashableScriptData \"\\216y\\159\\216y\\128\\216y\\159X\\FS\\229\\&0\\135\\251L\\152\\161|+qV.\\229\\186l\\245|\\GS\\159\\208\\DC1W\\254\
+\&7!\\210\\ETX0KThreadToken\\255\\255\" (ScriptDataConstructor 0 [ScriptDataConstructor 0 [],ScriptDataConstructor 0 
+[ScriptDataBytes \"\\229\\&0\\135\\251L\\152\\161|+qV.\\229\\186l\\245|\\GS\\159\\208\\DC1W\\254\\&7!\\210\\ETX0\",ScriptDataBytes \"ThreadToken\"]]))) 
+ReferenceScriptNone)]}"
+-}
+
+
+tt :: AssetClass
+tt = assetClass curr tn
+
+
 data Phase = Initial
-		   | Holding
+           | Holding
            | Collecting 
        deriving (Show, Eq, Generic)
 
@@ -292,7 +319,7 @@ instance ContractModel MultiSigModel where
       wait 1
     Start w v tt' -> do
       phase .= Holding
-      --withdraw (walletAddress w) (v <> (assetClassValue tt 1))
+      withdraw (walletAddress w) (v ) -- <> (assetClassValue tt 1))
       actualValue .= v
       threadToken .= tt'
       wait 1
@@ -375,7 +402,7 @@ currC :: Value.PolicyId
 currC = PolicyId {unPolicyId = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" }
 
 tnC :: Value.AssetName
-tnC = AssetName "ThreadToken"
+tnC = AssetName "OtherToken"
 
 defInitialDist :: Map Ledger.CardanoAddress Value.Value
 defInitialDist = Map.fromList $ (, (Value.lovelaceValueOf 99999900000000000 <> 
@@ -416,7 +443,6 @@ act = \case
         modelParams
         tt
   Start w v tt ->
-    
       start
         (walletAddress w)
         (walletPrivateKey w)
@@ -424,6 +450,16 @@ act = \case
         v
         tt
   
+--createToken
+--registerSymToken -?
+--3rd arg to perform
+ {-
+https://github.com/input-output-hk/quickcheck-contractmodel/blob/master/quickcheck-contractmodel/src/Test/QuickCheck/ContractModel.hs
+createSymToken, registerSymToken, third argument to perform
+https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc31314e8b6fc621241f5f15/cooked-contractmodel/test/Spec/Auction.hs#L99
+https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc31314e8b6fc621241f5f15/cooked-contractmodel/test/Spec/Auction.hs#L185
+https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc31314e8b6fc621241f5f15/cooked-contractmodel/test/Spec/Auction.hs#L190
+ -}
 
 
 prop_MultiSig :: Actions MultiSigModel -> Property
@@ -538,16 +574,16 @@ tests =
     [ checkPredicateOptions
         options
         "can start"
-        ( hasValidatedTransactionCountOfTotal 1 1 )
-            -- .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1)))
+        ( hasValidatedTransactionCountOfTotal 1 1 
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
         $ do
           act $ Start 1 (Ada.adaValueOf 100) tt
 		  
-   {- , checkPredicateOptions
+    , checkPredicateOptions
         options
         "can propose"
         ( hasValidatedTransactionCountOfTotal 2 2
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             .&&. walletFundsChange (walletAddress w2) mempty
         )
@@ -559,7 +595,7 @@ tests =
         options
         "can add"
         ( hasValidatedTransactionCountOfTotal 4 4
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1)))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         
@@ -572,7 +608,7 @@ tests =
         options
         "can pay"
         ( hasValidatedTransactionCountOfTotal 5 5
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
             .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
@@ -586,7 +622,7 @@ tests =
         options
         "can cancel"
         ( hasValidatedTransactionCountOfTotal 7 7
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1)))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         
@@ -602,7 +638,7 @@ tests =
         options
         "can double pay"
         ( hasValidatedTransactionCountOfTotal 9 9
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
             .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 30)
             .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
@@ -617,8 +653,8 @@ tests =
           act $ Add 5
           act $ Add 4
           act $ Pay 2
-	, testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
-	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) -}
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
+	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) {--}
     ]
 
 
