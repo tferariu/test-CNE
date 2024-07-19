@@ -567,8 +567,6 @@ prop_MultiSig :: Actions MultiSigModel -> Property
 prop_MultiSig = E.propRunActionsWithOptions options
 
 
-prop_Escrow_DoubleSatisfaction :: Actions MultiSigModel -> Property
-prop_Escrow_DoubleSatisfaction = E.checkDoubleSatisfactionWithOptions options
 
 
 simpleVestTest :: DL MultiSigModel ()
@@ -665,8 +663,13 @@ validityChecks = do
 prop_validityChecks :: Actions EscrowModel -> Property
 prop_validityChecks = E.checkThreatModelWithOptions options validityChecks-}
 
+prop_MultiSig_DoubleSatisfaction :: Actions MultiSigModel -> Property
+prop_MultiSig_DoubleSatisfaction = E.checkDoubleSatisfactionWithOptions options
 
-
+{-
+prop_Escrow_DoubleSatisfaction :: Actions MultiSigModel -> Property
+prop_Escrow_DoubleSatisfaction = E.checkDoubleSatisfactionWithOptions options
+-}
 
 tests :: TestTree
 tests =
@@ -754,13 +757,33 @@ tests =
           act $ Add 5
           act $ Add 4
           act $ Pay 2
-    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
+    , testProperty "QuickCheck double satisfaction fails" $
+        QC.expectFailure (QC.noShrinking prop_MultiSig_DoubleSatisfaction)
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 1000 prop_MultiSig
 	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) {--}
     ]
 
 
 
+{-
 
+[
+		[+] tok.var5 := Start 1 (Value {getValue = Map {unMap = [(,Map {unMap = [("",16400716675)]})]}}),
+        [+]Propose 1 (Value {getValue = Map {unMap = [(,Map {unMap = [("",9572071720)]})]}}) 1 1596059147167,
+        [+]Add 4,
+        [+]Add 5,
+        [+]Pay 4,
+        [+]Propose 5 (Value {getValue = Map {unMap = [(,Map {unMap = [("",6687351965)]})]}}) 4 1596059151023,
+        [+]Add 5,
+        [+]Add 4,
+        [+]Pay 3,
+        [+]Propose 5 (Value {getValue = Map {unMap = [(,Map {unMap = [("",140359590)]})]}}) 3 1596059183434,
+        [+]Add 4,
+        [+]Add 3,
+        [+]Pay 3
+]
+
+-}
 
 checkPropMultiSigWithCoverage :: IO ()
 checkPropMultiSigWithCoverage = do
