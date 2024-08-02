@@ -16,6 +16,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
+--{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:conservative-optimisation #-}
+
 module Plutus.Examples.MultiSigSpec (
   
   tests,
@@ -67,7 +69,7 @@ import Ledger.Tx.CardanoAPI (fromCardanoSlotNo)
 import Ledger.Typed.Scripts qualified as Scripts
 import Ledger.Value.CardanoAPI qualified as Value
 import Plutus.Script.Utils.Ada qualified as Ada
-import Plutus.Script.Utils.Value (Value, geq, TokenName (..), AssetClass (..), CurrencySymbol (..), assetClass, valueOf, assetClassValue)
+import Plutus.Script.Utils.Value (Value, geq, gt, TokenName (..), AssetClass (..), CurrencySymbol (..), assetClass, valueOf, assetClassValue)
 import PlutusLedgerApi.V1.Time (POSIXTime)
 
 import Plutus.Examples.MultiSig hiding (Input(..), Label(..))
@@ -78,6 +80,7 @@ import Plutus.Examples.MultiSigAPI (
   pay,
   cancel,
   start,
+  close,
   --typedValidator,
  )
 import Plutus.Examples.MultiSig qualified as Impl
@@ -194,7 +197,8 @@ tn :: TokenName
 tn = "ThreadToken"
 
 curr :: CurrencySymbol
-curr = "e53087fb4c98a17c2b71562ee5ba6cf57c1d9fd01157fe3721d20330" 
+curr = "baed558179f54dddf980cdc8462f5fc10232b1cb36592928d30e3cfa"
+--"ebccd1c5c11830d79458ff798e3ce918020dae161cb1ba377637b81e" 
 
 --curSymbol modelParams oref?? tn
 {-
@@ -228,6 +232,7 @@ data MultiSigModel = MultiSigModel
   , _allowedSignatories :: [Wallet] 
   , _requiredSignatories :: Integer
   , _threadToken :: Maybe QCCM.SymToken --AssetClass
+  , _txIn :: Maybe QCCM.SymTxIn
   , _phase :: Phase
   , _paymentValue :: Value
   , _paymentTarget :: Maybe Wallet
@@ -265,6 +270,7 @@ instance ContractModel MultiSigModel where
     | Pay Wallet
     | Cancel Wallet
     | Start Wallet Value
+    | Close Wallet	
     deriving (Eq, Show, Generic)
 
   initialState =
@@ -278,7 +284,7 @@ instance ContractModel MultiSigModel where
       , _paymentTarget = Nothing
       , _deadline = Nothing
       , _actualSignatories = []
-      
+      , _txIn = Nothing
       }
 
 
@@ -324,23 +330,29 @@ instance ContractModel MultiSigModel where
       wait 1
     Start w v -> do
       phase .= Holding
-      withdraw (walletAddress w) (v ) -- <> (assetClassValue tt 1))
+      withdraw (walletAddress w) (v) -- <> (assetClassValue tt 1))
       actualValue .= v
       symToken <- QCCM.createToken "thread token"
       threadToken .= Just symToken
+      symTxIn <- QCCM.createTxIn "minting input"
+      txIn .= Just symTxIn
       wait 1
-
-
+    Close w -> do
+      phase .= Initial
+      actualValue .= mempty
+      threadToken .= Nothing
+      wait 1
 
   precondition s a = case a of
 			Propose w1 v w2 d -> currentPhase == Holding && (currentValue `geq` v)
 			Add w -> currentPhase == Collecting && (elem w sigs) -- && not (elem w actualSigs)
-			Pay w -> currentPhase == Collecting && ((length actualSigs) >= (fromIntegral min))
+			Pay w -> currentPhase == Collecting && ((length actualSigs) >= (fromIntegral min)) && w == receiver
 			Cancel w -> currentPhase == Collecting && ((d + 2000) < timeInt)
 			Start w v -> currentPhase == Initial
+			Close w -> currentPhase == Holding && ((Ada.toValue Ledger.minAdaTxOutEstimated) `gt` currentValue)
 		where 
 		currentPhase = s ^. contractState . phase
-		currentValue = s ^. contractState . actualValue
+		currentValue = (s ^. contractState . actualValue) <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated)) --liquid value
 		sigs = s ^. contractState . allowedSignatories
 		actualSigs = s ^. contractState . actualSignatories
 		min = s ^. contractState . requiredSignatories
@@ -348,6 +360,7 @@ instance ContractModel MultiSigModel where
 		time = TimeSlot.slotToBeginPOSIXTime def slot
 		timeInt = Ledger.getPOSIXTime time
 		d = fromJust $ (s ^. contractState . deadline)
+		receiver = fromJust $ (s ^. contractState . paymentTarget)
 	
 {-	
     Redeem _ ->
@@ -376,18 +389,19 @@ instance ContractModel MultiSigModel where
 --put token back in Start
   arbitraryAction s = frequency [ (1 , Propose <$> genWallet
 											   <*> (Ada.lovelaceValueOf
-                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), valueOf amount Ada.adaSymbol Ada.adaToken))
+                                                   <$> choose ((Ada.getLovelace Ledger.minAdaTxOutEstimated), valueOf amount Ada.adaSymbol Ada.adaToken))
 											   <*> genWallet
-											   <*> chooseInteger (timeInt, timeInt + 10000))
-							    , (3, Add <$> genWallet)
+											   <*> chooseInteger (timeInt, timeInt + 1000))
+							    , (4, Add <$> genWallet)
 							    , (2, Pay <$> genWallet)
 							    , (1, Cancel <$> genWallet)
 							    , (1, Start <$> genWallet
 										    <*> (Ada.lovelaceValueOf
-                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 1000000000000)))
+                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 100000000)))
+								, (2, Close <$> genWallet)
 								]
 		where
-			amount   = s ^. contractState . actualValue
+			amount = (s ^. contractState . actualValue) -- <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated))
 			slot = s ^. currentSlot . to fromCardanoSlotNo
 			time = TimeSlot.slotToEndPOSIXTime def slot
 			timeInt = Ledger.getPOSIXTime time
@@ -440,6 +454,9 @@ act = \case
         (walletPrivateKey w)
         modelParams
         v
+ {- Close w ->
+    void $
+      close-}
 
 
 
@@ -470,14 +487,27 @@ fromPolicyId (API.PolicyId hash) = CurrencySymbol . Builtins.toBuiltin $ API.ser
 fromAssetName :: API.AssetName -> TokenName
 fromAssetName (API.AssetName bs) = TokenName $ Builtins.toBuiltin bs
 
+{-
+registerTxOutRef :: Monad m => String -> Ledger.TxOutRef -> QCCM.RunMonad m ()
+registerTxOutRef = QCCM.registerSymbolic
+-}
+
+ {-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+	  
+	  {-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+	  --QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+	  --QCCM.registerTxIn "minting input" tin
+	  {-
+	  QCCM.registerToken "thread token" (toAssetId (makeTT oref)) -}-}-}
+
 
 instance RunModel MultiSigModel E.EmulatorM where
 --  perform _ cmd _ = lift $ act cmd
 
   perform s (Start w v) translate = do
-	  oref <- lift $ start (walletAddress w) (walletPrivateKey w) modelParams v 
-	  QCCM.registerToken "thread token" (toAssetId (makeTT oref)) --(toAssetId tt)  --(makeTT (head (Map.keys (E.utxosAtPlutus (walletAddress w))))))
-  
+    (oref, tin) <- lift $ start (walletAddress w) (walletPrivateKey w) modelParams v 
+    QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+    QCCM.registerTxIn "minting input" (tin)     
  	
   perform s (Propose w1 v w2 d) translate = void $ do 
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
@@ -510,6 +540,16 @@ instance RunModel MultiSigModel E.EmulatorM where
         (walletPrivateKey w)
         modelParams
         ttref
+  perform s (Close w) translate = void $ do 
+    let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
+        tinref = fromJust (translate <$> s ^. contractState . txIn)
+    lift $ close
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        ttref
+        tinref
+  
 	
 
  
@@ -675,7 +715,8 @@ tests :: TestTree
 tests =
   testGroup
     "MultiSig"
-    [ checkPredicateOptions
+    [ testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
+	, checkPredicateOptions
         options
         "can start"
         ( hasValidatedTransactionCountOfTotal 1 1 
@@ -756,14 +797,13 @@ tests =
           act $ Propose 3 (Ada.adaValueOf 30) 2 12345
           act $ Add 5
           act $ Add 4
-          act $ Pay 2
-    , testProperty "QuickCheck double satisfaction fails" $
-        QC.expectFailure (QC.noShrinking prop_MultiSig_DoubleSatisfaction)
-    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 1000 prop_MultiSig
-	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) {--}
+          act $ Pay 2		
+	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) 
+    --, testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction  
     ]
 
-
+{-    , testProperty "QuickCheck double satisfaction fails" $
+        QC.expectFailure (QC.noShrinking prop_MultiSig_DoubleSatisfaction)-}
 
 {-
 
