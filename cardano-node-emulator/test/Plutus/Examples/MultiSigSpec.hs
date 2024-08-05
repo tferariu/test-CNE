@@ -197,7 +197,11 @@ tn :: TokenName
 tn = "ThreadToken"
 
 curr :: CurrencySymbol
-curr = "baed558179f54dddf980cdc8462f5fc10232b1cb36592928d30e3cfa"
+curr = "cb73d16293198371287b2a0716e846dc5900ee039fe13a0cd2232407"
+
+tin :: API.TxIn
+tin = API.TxIn "dfb01b83aa6b161c1f7ca68eedbd6194b7485177c49fab7e3cf3b6ed197512b2" (API.TxIx 5)
+
 --"ebccd1c5c11830d79458ff798e3ce918020dae161cb1ba377637b81e" 
 
 --curSymbol modelParams oref?? tn
@@ -339,9 +343,13 @@ instance ContractModel MultiSigModel where
       wait 1
     Close w -> do
       phase .= Initial
+      actualValue' <- viewContractState actualValue  
+      deposit (walletAddress w) (actualValue' ) -- <> (fromJust (viewContractState threadToken)))
       actualValue .= mempty
       threadToken .= Nothing
       wait 1
+
+--(fromJust (translate <$> s ^. contractState . threadToken))
 
   precondition s a = case a of
 			Propose w1 v w2 d -> currentPhase == Holding && (currentValue `geq` v)
@@ -387,18 +395,18 @@ instance ContractModel MultiSigModel where
 
 
 --put token back in Start
-  arbitraryAction s = frequency [ (1 , Propose <$> genWallet
+  arbitraryAction s = frequency [ (2 , Propose <$> genWallet
 											   <*> (Ada.lovelaceValueOf
                                                    <$> choose ((Ada.getLovelace Ledger.minAdaTxOutEstimated), valueOf amount Ada.adaSymbol Ada.adaToken))
 											   <*> genWallet
 											   <*> chooseInteger (timeInt, timeInt + 1000))
-							    , (4, Add <$> genWallet)
-							    , (2, Pay <$> genWallet)
+							    , (5, Add <$> genWallet)
+							    , (3, Pay <$> genWallet)
 							    , (1, Cancel <$> genWallet)
 							    , (1, Start <$> genWallet
 										    <*> (Ada.lovelaceValueOf
                                                    <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 100000000)))
-								, (2, Close <$> genWallet)
+								, (3, Close <$> genWallet)
 								]
 		where
 			amount = (s ^. contractState . actualValue) -- <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated))
@@ -454,9 +462,14 @@ act = \case
         (walletPrivateKey w)
         modelParams
         v
- {- Close w ->
+  Close w ->
     void $
-      close-}
+      close
+        (walletAddress w)
+        (walletPrivateKey w)
+        modelParams
+        tt
+		tin
 
 
 
@@ -715,8 +728,7 @@ tests :: TestTree
 tests =
   testGroup
     "MultiSig"
-    [ testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
-	, checkPredicateOptions
+    [ checkPredicateOptions
         options
         "can start"
         ( hasValidatedTransactionCountOfTotal 1 1 
@@ -797,7 +809,24 @@ tests =
           act $ Propose 3 (Ada.adaValueOf 30) 2 12345
           act $ Add 5
           act $ Add 4
-          act $ Pay 2		
+          act $ Pay 2
+    , checkPredicateOptions
+        options
+        "can close"
+        ( hasValidatedTransactionCountOfTotal 6 6
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 97)
+            -- .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
+            -- .&&. walletFundsChange (walletAddress w3) mempty
+        )
+        $ do
+          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Propose 2 (Ada.adaValueOf 97) 3 12345
+          act $ Add 4
+          act $ Add 5
+          act $ Pay 3
+          act $ Close 4		  
+	, testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig		  
 	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) 
     --, testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction  
     ]

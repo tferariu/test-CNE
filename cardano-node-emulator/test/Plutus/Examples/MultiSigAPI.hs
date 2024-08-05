@@ -88,6 +88,7 @@ import PlutusLedgerApi.V3.Contexts (valuePaidTo)
 import Plutus.Examples.MultiSig
 import Ledger.Address (toWitness)
 import Plutus.Script.Utils.V1.Scripts qualified as Script
+import Ledger (minAdaTxOutEstimated)
 --import Cardano.Ledger.Alonzo.Plutus.TxInfo (transPolicyID)
 
 
@@ -193,6 +194,9 @@ mkStartTx params wallet v = do
    --   asdf = toAssetId uO
    --   asdd = toAssetId unspentOutputs
   --this is probably wrong, but find some way to get a single utxo out
+ {-
+  when (True)
+    $ throwError $ E.CustomError $ ("Actually: " ++ show minAdaTxOutEstimated ++ " and " ++ show tin) -- ("found no SM but: " ++ (show unspentOutputs)) -}
   
   let utxos = Map.toList (C.unUTxO unspentOutputs)
   
@@ -732,8 +736,13 @@ mkCloseTx params tt tin = do
           Map.filter (\(C.TxOut _aie tov _tod _rs) -> 
             (assetClassValueOf (C.fromCardanoValue (C.fromCardanoTxOutValue tov)) 
             tt == 1)) $ C.unUTxO unspentOutputs
+    currentValue = C.fromCardanoValue (foldMap Ledger.cardanoTxOutValue validUnspentOutputs)
   when (length (validUnspentOutputs) /= 1)
     $ throwError $ E.CustomError $ "not SM" 
+
+  when (False)
+    $ throwError $ E.CustomError $ ("Actually: " ++ show (currentValue ) ++ " and " ++ show validUnspentOutputs)
+-- <> (negate minAdaTxOutEstimated)
   let
     validityRange = toValidityRange slotConfig $ Interval.from current
     redeemer = toHashableScriptData (Close)
@@ -746,7 +755,7 @@ mkCloseTx params tt tin = do
           witnessHeader C.InlineScriptDatum redeemer C.zeroExecutionUnits
     txIns = (,witness) <$> Map.keys validUnspentOutputs
 	
-  let 
+  let {-
     tn = "ThreadToken"
     an = "ThreadToken" 
     oref = C.fromCardanoTxIn tin
@@ -756,13 +765,13 @@ mkCloseTx params tt tin = do
         C.TxMintValue
           C.MaryEraOnwardsConway
           (mintValue)
-          (C.BuildTxWith (Map.singleton (getPid params oref tn) mintWitness))
+          (C.BuildTxWith (Map.singleton (getPid params oref tn) mintWitness)) -}
 --(toPolicyId (currencyMPSHash (fst (unAssetClass tt))))	
     utx =
         E.emptyTxBodyContent	
           { C.txIns = txIns
           --, C.txOuts = remainingOutputs
-          , C.txMintValue = txMintValue
+          --, C.txMintValue = txMintValue
           , C.txValidityLowerBound = fst validityRange
           , C.txValidityUpperBound = snd validityRange
           }

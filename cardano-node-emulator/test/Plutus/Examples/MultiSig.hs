@@ -92,6 +92,7 @@ import Plutus.Script.Utils.V3.Scripts qualified as V3
 import Plutus.Script.Utils.Value --(Value, geq, lt)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 
+import PlutusLedgerApi.V1.Value qualified as V
 import PlutusLedgerApi.V1.Address
 import PlutusLedgerApi.V3 hiding (TxId)--(Datum (Datum))
 import PlutusLedgerApi.V3.Contexts hiding (TxId)--(valuePaidTo)
@@ -200,6 +201,9 @@ getVal ip ac = assetClassValueOf (txOutValue ip) ac
 minValue :: Value
 minValue = lovelaceValue (Ada.getLovelace minAdaTxOutEstimated)
 
+justLovelace :: Value -> Value
+justLovelace = V.lovelaceValue . V.lovelaceValueOf
+
 ------------------------------------------------------------------------------------------------------------------------------
 -- on-chain
 ------------------------------------------------------------------------------------------------------------------------------
@@ -225,8 +229,8 @@ ownOutput ctx = case getContinuingOutputs ctx of
 {-# INLINABLE stopsCont #-}
 stopsCont :: ScriptContext -> Bool
 stopsCont ctx = case getContinuingOutputs ctx of
-        [o] -> False
-        _   -> True  
+        [] -> True
+        _   -> False  
 
 {-# INLINABLE smDatum #-}
 smDatum :: Maybe Datum -> Maybe State
@@ -249,11 +253,11 @@ newLabel ctx = label (outputDatum ctx)
 
 {-# INLINABLE oldValue #-}
 oldValue :: ScriptContext -> Value
-oldValue ctx = txOutValue (ownInput ctx) <> (negate minValue)
+oldValue ctx = justLovelace (txOutValue (ownInput ctx) <> (negate minValue))
 
 {-# INLINABLE newValue #-}
 newValue :: ScriptContext -> Value
-newValue ctx = txOutValue (ownOutput ctx) <> (negate minValue)
+newValue ctx = justLovelace (txOutValue (ownOutput ctx) <> (negate minValue))
 
 {-# INLINABLE expired #-}
 expired :: Deadline -> ScriptContext -> Bool
@@ -295,7 +299,7 @@ agdaValidator param dat red ctx
                        Add _ -> False
                        Pay -> False
                        Cancel -> False
-                       Close -> True --gt minValue (oldValue ctx) && stopsCont ctx
+                       Close -> stopsCont ctx && gt minValue (oldValue ctx) --gt minValue (oldValue ctx) && stopsCont ctx
         Collecting v pkh d sigs -> case red of
                                        Propose _ _ _ -> False
                                        Add sig -> newValue ctx == oldValue ctx &&
@@ -377,9 +381,12 @@ agdaValidator param oldLabel red ctx
 mkValidator :: Params -> State -> Input -> ScriptContext -> Bool
 mkValidator param st red ctx = 
 
-    traceIfFalse "token missing from input" (getVal (ownInput ctx) (tToken st)  == 1)                       &&
+    traceIfFalse "tmi" (getVal (ownInput ctx) (tToken st)  == 1)                       &&
+    traceIfFalse "fv" (agdaValidator param (label st) red ctx)                         &&
+	(case red of 
+	  Close -> traceIfFalse "nS" (stopsCont ctx)
+	  _ -> traceIfFalse "tmo" (getVal (ownOutput ctx) (tToken st) == 1) )
    -- traceIfFalse "token missing from output" ((stopsCont ctx) || (getVal (ownOutput ctx) (tToken st) == 1)) &&
-    traceIfFalse "failed Validation" (agdaValidator param (label st) red ctx)
 
 
 
@@ -404,11 +411,11 @@ mkOtherAddress = V3.validatorAddress . smTypedValidator
 {-# INLINABLE mkPolicy #-}
 mkPolicy :: Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
 mkPolicy addr oref tn () ctx 
-    | amt == 1  = traceIfFalse "UTxO not consumed"   hasUTxO    &&
-                  traceIfFalse "not initial state" checkDatum   &&
-                  traceIfFalse "token not deposited" checkValue
-    | amt == -1 = True --traceIfFalse "contract not stopped" noOutput
-    | otherwise = traceError "wrong amount minted"
+    | amt == 1  = traceIfFalse "nU"   hasUTxO    &&
+                  traceIfFalse "nI" checkDatum   &&
+                  traceIfFalse "nD" checkValue
+    | amt == -1 = traceIfFalse "contract not stopped" noOutput
+    | otherwise = traceError "wO"
 
 {-
 case checkMintedAmount of
@@ -456,7 +463,7 @@ traceIfFalse "UTxO not consumed"   hasUTxO                  &&
     scriptOutput :: TxOut
     scriptOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
     	[o] -> o
-    	_ -> traceError "not unique SM output"
+    	_ -> traceError "nU"
     
     checkDatum :: Bool
     checkDatum = case txOutDatum scriptOutput of 
