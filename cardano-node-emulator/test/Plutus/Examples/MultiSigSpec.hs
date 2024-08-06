@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -10,16 +10,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-} --maybe here the version stuff happens
+-- maybe here the version stuff happens
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
---{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:conservative-optimisation #-}
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:conservative-optimisation #-}
 
 module Plutus.Examples.MultiSigSpec (
-  
   tests,
   prop_MultiSig,
   prop_Check,
@@ -69,39 +69,52 @@ import Ledger.Tx.CardanoAPI (fromCardanoSlotNo)
 import Ledger.Typed.Scripts qualified as Scripts
 import Ledger.Value.CardanoAPI qualified as Value
 import Plutus.Script.Utils.Ada qualified as Ada
-import Plutus.Script.Utils.Value (Value, geq, gt, TokenName (..), AssetClass (..), CurrencySymbol (..), assetClass, valueOf, assetClassValue)
+import Plutus.Script.Utils.Value (
+  AssetClass (..),
+  CurrencySymbol (..),
+  TokenName (..),
+  Value,
+  assetClass,
+  assetClassValue,
+  geq,
+  gt,
+  valueOf,
+ )
 import PlutusLedgerApi.V1.Time (POSIXTime)
 
-import Plutus.Examples.MultiSig hiding (Input(..), Label(..))
-import Plutus.Examples.MultiSigAPI (
-  --Params (..),
-  propose,
-  add,
-  pay,
-  cancel,
-  start,
-  close,
-  --typedValidator,
- )
+import Plutus.Examples.MultiSig hiding (Input (..), Label (..))
+
+-- Params (..),
+
+-- typedValidator,
+
 import Plutus.Examples.MultiSig qualified as Impl
+import Plutus.Examples.MultiSigAPI (
+  add,
+  cancel,
+  close,
+  pay,
+  propose,
+  start,
+ )
 
 import PlutusTx (fromData)
-import PlutusTx.Prelude qualified as PlutusTx
 import PlutusTx.Monoid (inv)
+import PlutusTx.Prelude qualified as PlutusTx
 
 import Data.Maybe (fromJust)
 
 import Cardano.Api (
   AddressInEra (AddressInEra),
   AllegraEraOnwards (AllegraEraOnwardsConway),
+  AssetName (..),
   IsShelleyBasedEra (shelleyBasedEra),
+  PolicyId (..),
   TxOut (TxOut),
   TxValidityLowerBound (TxValidityLowerBound, TxValidityNoLowerBound),
   TxValidityUpperBound (TxValidityUpperBound),
   UTxO (unUTxO),
   toAddressAny,
-  PolicyId (..),
-  AssetName (..),
  )
 import Test.QuickCheck qualified as QC hiding ((.&&.))
 import Test.QuickCheck.ContractModel (
@@ -140,24 +153,22 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (
   Property,
   choose,
+  chooseInteger,
   frequency,
   testProperty,
-  chooseInteger,
  )
 
-import PlutusTx.Builtins qualified as Builtins
 import Cardano.Api qualified as API
-
+import PlutusTx.Builtins qualified as Builtins
 
 curr2 :: CurrencySymbol
-curr2 = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" 
+curr2 = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e"
 
 on :: TokenName
 on = "OtherToken"
 
 ot :: AssetClass
 ot = assetClass curr2 tn
-
 
 type Wallet = Integer
 
@@ -186,12 +197,12 @@ walletPaymentPubKeyHash =
     . pred
     . fromIntegral
 
-
-
-
 modelParams :: Params
-modelParams = Params {authSigs = [walletPaymentPubKeyHash w4 , walletPaymentPubKeyHash w5, walletPaymentPubKeyHash w3], nr = 2}
-
+modelParams =
+  Params
+    { authSigs = [walletPaymentPubKeyHash w4, walletPaymentPubKeyHash w5, walletPaymentPubKeyHash w3]
+    , nr = 2
+    }
 
 tn :: TokenName
 tn = "ThreadToken"
@@ -202,22 +213,21 @@ curr = "cb73d16293198371287b2a0716e846dc5900ee039fe13a0cd2232407"
 tin :: API.TxIn
 tin = API.TxIn "dfb01b83aa6b161c1f7ca68eedbd6194b7485177c49fab7e3cf3b6ed197512b2" (API.TxIx 5)
 
---"ebccd1c5c11830d79458ff798e3ce918020dae161cb1ba377637b81e" 
+-- "ebccd1c5c11830d79458ff798e3ce918020dae161cb1ba377637b81e"
 
---curSymbol modelParams oref?? tn
+-- curSymbol modelParams oref?? tn
 {-
 UTxO {unUTxO = fromList [(TxIn \"bf0f8addee8b501dcbeb4ef0309e41ea765a3613d50dd854a852408407c32111\" (TxIx 0),
-TxOut (AddressInEra (ShelleyAddressInEra ShelleyBasedEraConway) (ShelleyAddress Testnet (ScriptHashObj 
-(ScriptHash \"1abefe14b0d3052a84f54276f3efac6f0345eb4a0b14dc271480eabc\")) StakeRefNull)) 
-(TxOutValueShelleyBased ShelleyBasedEraConway (MaryValue (Coin 100000000) 
+TxOut (AddressInEra (ShelleyAddressInEra ShelleyBasedEraConway) (ShelleyAddress Testnet (ScriptHashObj
+(ScriptHash \"1abefe14b0d3052a84f54276f3efac6f0345eb4a0b14dc271480eabc\")) StakeRefNull))
+(TxOutValueShelleyBased ShelleyBasedEraConway (MaryValue (Coin 100000000)
 (MultiAsset (fromList [(PolicyID {policyID = ScriptHash \"e53087fb4c98a17c2b71562ee5ba6cf57c1d9fd01157fe3721d20330\"},
-fromList [(\"546872656164546f6b656e\",1)])])))) (TxOutDatumInline BabbageEraOnwardsConway 
+fromList [(\"546872656164546f6b656e\",1)])])))) (TxOutDatumInline BabbageEraOnwardsConway
 (HashableScriptData \"\\216y\\159\\216y\\128\\216y\\159X\\FS\\229\\&0\\135\\251L\\152\\161|+qV.\\229\\186l\\245|\\GS\\159\\208\\DC1W\\254\
-\&7!\\210\\ETX0KThreadToken\\255\\255\" (ScriptDataConstructor 0 [ScriptDataConstructor 0 [],ScriptDataConstructor 0 
-[ScriptDataBytes \"\\229\\&0\\135\\251L\\152\\161|+qV.\\229\\186l\\245|\\GS\\159\\208\\DC1W\\254\\&7!\\210\\ETX0\",ScriptDataBytes \"ThreadToken\"]]))) 
+\&7!\\210\\ETX0KThreadToken\\255\\255\" (ScriptDataConstructor 0 [ScriptDataConstructor 0 [],ScriptDataConstructor 0
+[ScriptDataBytes \"\\229\\&0\\135\\251L\\152\\161|+qV.\\229\\186l\\245|\\GS\\159\\208\\DC1W\\254\\&7!\\210\\ETX0\",ScriptDataBytes \"ThreadToken\"]])))
 ReferenceScriptNone)]}"
 -}
-
 
 tt :: AssetClass
 tt = assetClass curr tn
@@ -225,17 +235,17 @@ tt = assetClass curr tn
 makeTT :: Ledger.TxOutRef -> AssetClass
 makeTT oref = assetClass (curSymbol modelParams oref tn) tn
 
-
-data Phase = Initial
-           | Holding
-           | Collecting 
-       deriving (Show, Eq, Generic)
+data Phase
+  = Initial
+  | Holding
+  | Collecting
+  deriving (Show, Eq, Generic)
 
 data MultiSigModel = MultiSigModel
   { _actualValue :: Value
-  , _allowedSignatories :: [Wallet] 
+  , _allowedSignatories :: [Wallet]
   , _requiredSignatories :: Integer
-  , _threadToken :: Maybe QCCM.SymToken --AssetClass
+  , _threadToken :: Maybe QCCM.SymToken -- AssetClass
   , _txIn :: Maybe QCCM.SymTxIn
   , _phase :: Phase
   , _paymentValue :: Value
@@ -247,7 +257,6 @@ data MultiSigModel = MultiSigModel
 
 makeLenses ''MultiSigModel
 
-
 options :: E.Options MultiSigModel
 options =
   E.defaultOptions
@@ -256,12 +265,10 @@ options =
     , E.coverageIndex = Impl.covIdx
     }
 
-
-
 genWallet :: QC.Gen Wallet
 genWallet = QC.elements testWallets
 
-genTT :: QC.Gen	AssetClass
+genTT :: QC.Gen AssetClass
 genTT = QC.elements [tt]
 
 beginningOfTime :: Integer
@@ -274,15 +281,15 @@ instance ContractModel MultiSigModel where
     | Pay Wallet
     | Cancel Wallet
     | Start Wallet Value
-    | Close Wallet	
+    | Close Wallet
     deriving (Eq, Show, Generic)
 
   initialState =
     MultiSigModel
-      { _actualValue = mempty 
+      { _actualValue = mempty
       , _allowedSignatories = [w5, w3, w4]
-	  , _requiredSignatories = (nr modelParams)
-      , _threadToken = Nothing --tt --AssetClass (adaSymbol, adaToken)
+      , _requiredSignatories = (nr modelParams)
+      , _threadToken = Nothing -- tt --AssetClass (adaSymbol, adaToken)
       , _phase = Initial
       , _paymentValue = mempty
       , _paymentTarget = Nothing
@@ -291,28 +298,28 @@ instance ContractModel MultiSigModel where
       , _txIn = Nothing
       }
 
-
--- here?
+  -- here?
   nextState a = void $ case a of
     Propose w1 v w2 d -> do
       phase .= Collecting
       paymentValue .= v
       paymentTarget .= Just w2
---      curSlot <- viewModelState currentSlot
---      endSlot .= curSlot + deadline
+      --      curSlot <- viewModelState currentSlot
+      --      endSlot .= curSlot + deadline
       deadline .= Just d
       wait 1
     Add w -> do
       actualSignatories' <- viewContractState actualSignatories
-      actualSignatories %= --(w:) 
-	                       (case (elem w actualSignatories') of
-                                True -> id
-                                False -> (w:))
+      actualSignatories
+        %= ( case (elem w actualSignatories') of -- (w:)
+              True -> id
+              False -> (w :)
+           )
       wait 1
-      {-
-      actualSignatories' <- viewContractState actualSignatories
-      actualSignatories’ = nub (w : actualSignatories)
-      -}
+    {-
+    actualSignatories' <- viewContractState actualSignatories
+    actualSignatories’ = nub (w : actualSignatories)
+    -}
     Pay w -> do
       phase .= Holding
       deadline .= Nothing
@@ -322,7 +329,7 @@ instance ContractModel MultiSigModel where
       actualValue' <- viewContractState actualValue
       paymentValue' <- viewContractState paymentValue
       actualValue .= actualValue' <> (PlutusTx.negate paymentValue')
-      deposit (walletAddress (fromJust address)) paymentValue' 
+      deposit (walletAddress (fromJust address)) paymentValue'
       paymentValue .= mempty
       wait 1
     Cancel w -> do
@@ -343,89 +350,96 @@ instance ContractModel MultiSigModel where
       wait 1
     Close w -> do
       phase .= Initial
-      actualValue' <- viewContractState actualValue  
-      deposit (walletAddress w) (actualValue' ) -- <> (fromJust (viewContractState threadToken)))
+      actualValue' <- viewContractState actualValue
+      deposit (walletAddress w) (actualValue') -- <> (fromJust (viewContractState threadToken)))
       actualValue .= mempty
       threadToken .= Nothing
       wait 1
 
---(fromJust (translate <$> s ^. contractState . threadToken))
+  -- (fromJust (translate <$> s ^. contractState . threadToken))
 
   precondition s a = case a of
-			Propose w1 v w2 d -> currentPhase == Holding && (currentValue `geq` v)
-			Add w -> currentPhase == Collecting && (elem w sigs) -- && not (elem w actualSigs)
-			Pay w -> currentPhase == Collecting && ((length actualSigs) >= (fromIntegral min)) && w == receiver
-			Cancel w -> currentPhase == Collecting && ((d + 2000) < timeInt)
-			Start w v -> currentPhase == Initial
-			Close w -> currentPhase == Holding && ((Ada.toValue Ledger.minAdaTxOutEstimated) `gt` currentValue)
-		where 
-		currentPhase = s ^. contractState . phase
-		currentValue = (s ^. contractState . actualValue) <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated)) --liquid value
-		sigs = s ^. contractState . allowedSignatories
-		actualSigs = s ^. contractState . actualSignatories
-		min = s ^. contractState . requiredSignatories
-		slot = s ^. currentSlot . to fromCardanoSlotNo
-		time = TimeSlot.slotToBeginPOSIXTime def slot
-		timeInt = Ledger.getPOSIXTime time
-		d = fromJust $ (s ^. contractState . deadline)
-		receiver = fromJust $ (s ^. contractState . paymentTarget)
-	
-{-	
-    Redeem _ ->
-      (s ^. contractState . contributions . to Data.Foldable.fold)
-        `geq` (s ^. contractState . targets . to Data.Foldable.fold)
-        && ( s ^. currentSlot . to fromCardanoSlotNo
-              < s ^. contractState . refundSlot - 2
-           )
-    Refund w ->
-      s ^. currentSlot . to fromCardanoSlotNo
-        > s ^. contractState . refundSlot
-        && Nothing /= (s ^. contractState . contributions . at w)
-    Pay _ v ->
-      s ^. currentSlot . to fromCardanoSlotNo
-        < s ^. contractState . refundSlot - 2
-        && Ada.adaValueOf (fromInteger v) `geq` Ada.toValue Ledger.minAdaTxOutEstimated
-    BadRefund w w' ->
-      s ^. currentSlot . to fromCardanoSlotNo < s ^. contractState . refundSlot - 2 -- why -2?
-        || w /= w'-}
+    Propose w1 v w2 d -> currentPhase == Holding && (currentValue `geq` v)
+    Add w -> currentPhase == Collecting && (elem w sigs) -- && not (elem w actualSigs)
+    Pay w -> currentPhase == Collecting && ((length actualSigs) >= (fromIntegral min)) && w == receiver
+    Cancel w -> currentPhase == Collecting && ((d + 2000) < timeInt)
+    Start w v -> currentPhase == Initial
+    Close w -> currentPhase == Holding && ((Ada.toValue Ledger.minAdaTxOutEstimated) `gt` currentValue)
+    where
+      currentPhase = s ^. contractState . phase
+      currentValue = (s ^. contractState . actualValue) <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated)) -- liquid value
+      sigs = s ^. contractState . allowedSignatories
+      actualSigs = s ^. contractState . actualSignatories
+      min = s ^. contractState . requiredSignatories
+      slot = s ^. currentSlot . to fromCardanoSlotNo
+      time = TimeSlot.slotToBeginPOSIXTime def slot
+      timeInt = Ledger.getPOSIXTime time
+      d = fromJust $ (s ^. contractState . deadline)
+      receiver = fromJust $ (s ^. contractState . paymentTarget)
 
+  {-
+      Redeem _ ->
+        (s ^. contractState . contributions . to Data.Foldable.fold)
+          `geq` (s ^. contractState . targets . to Data.Foldable.fold)
+          && ( s ^. currentSlot . to fromCardanoSlotNo
+                < s ^. contractState . refundSlot - 2
+             )
+      Refund w ->
+        s ^. currentSlot . to fromCardanoSlotNo
+          > s ^. contractState . refundSlot
+          && Nothing /= (s ^. contractState . contributions . at w)
+      Pay _ v ->
+        s ^. currentSlot . to fromCardanoSlotNo
+          < s ^. contractState . refundSlot - 2
+          && Ada.adaValueOf (fromInteger v) `geq` Ada.toValue Ledger.minAdaTxOutEstimated
+      BadRefund w w' ->
+        s ^. currentSlot . to fromCardanoSlotNo < s ^. contractState . refundSlot - 2 -- why -2?
+          || w /= w'-}
 
   -- enable again later
   validFailingAction _ _ = False
 
+  -- put token back in Start
+  arbitraryAction s =
+    frequency
+      [
+        ( 2
+        , Propose
+            <$> genWallet
+            <*> ( Ada.lovelaceValueOf
+                    <$> choose ((Ada.getLovelace Ledger.minAdaTxOutEstimated), valueOf amount Ada.adaSymbol Ada.adaToken)
+                )
+            <*> genWallet
+            <*> chooseInteger (timeInt, timeInt + 1000)
+        )
+      , (5, Add <$> genWallet)
+      , (3, Pay <$> genWallet)
+      , (1, Cancel <$> genWallet)
+      ,
+        ( 1
+        , Start
+            <$> genWallet
+            <*> ( Ada.lovelaceValueOf
+                    <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 100000000)
+                )
+        )
+      , (3, Close <$> genWallet)
+      ]
+    where
+      amount = (s ^. contractState . actualValue) -- <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated))
+      slot = s ^. currentSlot . to fromCardanoSlotNo
+      time = TimeSlot.slotToEndPOSIXTime def slot
+      timeInt = Ledger.getPOSIXTime time
 
---put token back in Start
-  arbitraryAction s = frequency [ (2 , Propose <$> genWallet
-											   <*> (Ada.lovelaceValueOf
-                                                   <$> choose ((Ada.getLovelace Ledger.minAdaTxOutEstimated), valueOf amount Ada.adaSymbol Ada.adaToken))
-											   <*> genWallet
-											   <*> chooseInteger (timeInt, timeInt + 1000))
-							    , (5, Add <$> genWallet)
-							    , (3, Pay <$> genWallet)
-							    , (1, Cancel <$> genWallet)
-							    , (1, Start <$> genWallet
-										    <*> (Ada.lovelaceValueOf
-                                                   <$> choose (((Ada.getLovelace Ledger.minAdaTxOutEstimated) * 2), 100000000)))
-								, (3, Close <$> genWallet)
-								]
-		where
-			amount = (s ^. contractState . actualValue) -- <> (PlutusTx.negate (Ada.toValue Ledger.minAdaTxOutEstimated))
-			slot = s ^. currentSlot . to fromCardanoSlotNo
-			time = TimeSlot.slotToEndPOSIXTime def slot
-			timeInt = Ledger.getPOSIXTime time
-			--int' = Ledger.getSlot slot'
-
-
-
+-- int' = Ledger.getSlot slot'
 
 {-instance RunModel MultiSigModel E.EmulatorM where
   perform _ cmd _ = lift $ void $ act cmd-}
 
-
 act :: Action MultiSigModel -> E.EmulatorM ()
 act = \case
   Propose w1 v w2 d ->
-    void $ 
+    void $
       propose
         (walletAddress w1)
         (walletPrivateKey w1)
@@ -469,18 +483,20 @@ act = \case
         (walletPrivateKey w)
         modelParams
         tt
-		tin
-
-
+        tin
 
 toAssetId :: AssetClass -> API.AssetId
 toAssetId (AssetClass (sym, tok))
   | sym == Ada.adaSymbol, tok == Ada.adaToken = API.AdaAssetId
-  | otherwise                                 = API.AssetId (toPolicyId sym) (toAssetName tok)
+  | otherwise = API.AssetId (toPolicyId sym) (toAssetName tok)
 
 toPolicyId :: CurrencySymbol -> API.PolicyId
-toPolicyId sym@(CurrencySymbol bs) = either (error . show) API.PolicyId 
-		(API.deserialiseFromRawBytes API.AsScriptHash (Builtins.fromBuiltin bs))
+toPolicyId sym@(CurrencySymbol bs) =
+  either
+    (error . show)
+    API.PolicyId
+    (API.deserialiseFromRawBytes API.AsScriptHash (Builtins.fromBuiltin bs))
+
 {-
   | Just hash <- API.deserialiseFromRawBytes API.AsScriptHash
                                                     (Builtins.fromBuiltin bs) = API.PolicyId hash
@@ -489,9 +505,8 @@ toPolicyId sym@(CurrencySymbol bs) = either (error . show) API.PolicyId
 toAssetName :: TokenName -> API.AssetName
 toAssetName (TokenName bs) = API.AssetName $ Builtins.fromBuiltin bs
 
-
 fromAssetId :: API.AssetId -> AssetClass
-fromAssetId API.AdaAssetId            = AssetClass (Ada.adaSymbol, Ada.adaToken)
+fromAssetId API.AdaAssetId = AssetClass (Ada.adaSymbol, Ada.adaToken)
 fromAssetId (API.AssetId policy name) = AssetClass (fromPolicyId policy, fromAssetName name)
 
 fromPolicyId :: API.PolicyId -> CurrencySymbol
@@ -505,26 +520,25 @@ registerTxOutRef :: Monad m => String -> Ledger.TxOutRef -> QCCM.RunMonad m ()
 registerTxOutRef = QCCM.registerSymbolic
 -}
 
- {-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
-	  
-	  {-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
-	  --QCCM.registerToken "thread token" (toAssetId (makeTT oref))
-	  --QCCM.registerTxIn "minting input" tin
-	  {-
-	  QCCM.registerToken "thread token" (toAssetId (makeTT oref)) -}-}-}
+{-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
 
+  {-QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+  --QCCM.registerToken "thread token" (toAssetId (makeTT oref))
+  --QCCM.registerTxIn "minting input" tin
+  {-
+  QCCM.registerToken "thread token" (toAssetId (makeTT oref)) -}-}-}
 
 instance RunModel MultiSigModel E.EmulatorM where
---  perform _ cmd _ = lift $ act cmd
+  --  perform _ cmd _ = lift $ act cmd
 
   perform s (Start w v) translate = do
-    (oref, tin) <- lift $ start (walletAddress w) (walletPrivateKey w) modelParams v 
+    (oref, tin) <- lift $ start (walletAddress w) (walletPrivateKey w) modelParams v
     QCCM.registerToken "thread token" (toAssetId (makeTT oref))
-    QCCM.registerTxIn "minting input" (tin)     
- 	
-  perform s (Propose w1 v w2 d) translate = void $ do 
+    QCCM.registerTxIn "minting input" (tin)
+  perform s (Propose w1 v w2 d) translate = void $ do
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
-    lift $ propose
+    lift $
+      propose
         (walletAddress w1)
         (walletPrivateKey w1)
         modelParams
@@ -532,41 +546,42 @@ instance RunModel MultiSigModel E.EmulatorM where
         (walletPaymentPubKeyHash w2)
         d
         ttref
-  perform s (Add w) translate = void $ do 
+  perform s (Add w) translate = void $ do
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
-    lift $ add
+    lift $
+      add
         (walletAddress w)
         (walletPrivateKey w)
         modelParams
         ttref
-  perform s (Pay w) translate = void $ do 
+  perform s (Pay w) translate = void $ do
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
-    lift $ pay
+    lift $
+      pay
         (walletAddress w)
         (walletPrivateKey w)
         modelParams
         ttref
-  perform s (Cancel w) translate = void $ do 
+  perform s (Cancel w) translate = void $ do
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
-    lift $ cancel
+    lift $
+      cancel
         (walletAddress w)
         (walletPrivateKey w)
         modelParams
         ttref
-  perform s (Close w) translate = void $ do 
+  perform s (Close w) translate = void $ do
     let ttref = fromAssetId (fromJust (translate <$> s ^. contractState . threadToken))
         tinref = fromJust (translate <$> s ^. contractState . txIn)
-    lift $ close
+    lift $
+      close
         (walletAddress w)
         (walletPrivateKey w)
         modelParams
         ttref
         tinref
-  
-	
 
- 
- {-
+{-
   void $ do
     let mref = translate <$> s ^. contractState . txIn
         lotto = s ^. contractState . value
@@ -575,7 +590,7 @@ instance RunModel MultiSigModel E.EmulatorM where
     (ref, txout, tname) <- Lotto.mintSeal (Plutus.fromCardanoTxIn $ fromJust mref)
                                           (Ada.adaValueOf $ fromInteger lotto)
     registerTxIn "Lotto txIn"  (toTxIn ref)
-    registerToken "threadToken" (toAssetId (assetClass currency tname))  
+    registerToken "threadToken" (toAssetId (assetClass currency tname))
 
   Start w v tt ->
       start
@@ -583,31 +598,32 @@ instance RunModel MultiSigModel E.EmulatorM where
         (walletPrivateKey w)
         modelParams
         v
-		
+
 perform _ Offer _ = void $ do
     ref <- Auction.txOffer (wallet 1) (banana 1) 30_000_000
     registerTxIn "auction txIn" (toTxIn ref)
   perform s Hammer translate = void $ do
     let mref = translate <$> s ^. contractState . txIn
     Auction.txHammer (wallet 1) (Plutus.fromCardanoTxIn $ fromJust mref)-}
- 
+
 currC :: Value.PolicyId
-currC = PolicyId {unPolicyId = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" }
+currC = PolicyId{unPolicyId = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e"}
 
 tnC :: Value.AssetName
 tnC = AssetName "OtherToken"
 
 defInitialDist :: Map Ledger.CardanoAddress Value.Value
-defInitialDist = Map.fromList $ (, (Value.lovelaceValueOf 99999900000000000 <> 
-                 Value.singleton currC tnC 1)) <$> E.knownAddresses
+defInitialDist =
+  Map.fromList $
+    (,( Value.lovelaceValueOf 99999900000000000
+          <> Value.singleton currC tnC 1
+      ))
+      <$> E.knownAddresses
 
-
-
-  
---createToken
---registerSymToken -?
---3rd arg to perform
- {-
+-- createToken
+-- registerSymToken -?
+-- 3rd arg to perform
+{-
 https://github.com/input-output-hk/quickcheck-contractmodel/blob/master/quickcheck-contractmodel/src/Test/QuickCheck/ContractModel.hs
 createSymToken, registerSymToken, third argument to perform
 https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc31314e8b6fc621241f5f15/cooked-contractmodel/test/Spec/Auction.hs#L99
@@ -615,22 +631,19 @@ https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc
 https://github.com/Quviq/quickcheck-contractmodel-cooked/blob/35dfc688e3ea25fccc31314e8b6fc621241f5f15/cooked-contractmodel/test/Spec/Auction.hs#L190
  -}
 
-
 prop_MultiSig :: Actions MultiSigModel -> Property
 prop_MultiSig = E.propRunActionsWithOptions options
 
-
-
-
 simpleVestTest :: DL MultiSigModel ()
 simpleVestTest = do
-          action $ Start 1 (Ada.adaValueOf 100)
-          action $ Propose 2 (Ada.adaValueOf 10) 3 111111111111111111111111111
-          action $ Add 4
-          action $ Add 4
-          action $ Add 5
-          action $ Add 4
-          action $ Cancel 2
+  action $ Start 1 (Ada.adaValueOf 100)
+  action $ Propose 2 (Ada.adaValueOf 10) 3 111111111111111111111111111
+  action $ Add 4
+  action $ Add 4
+  action $ Add 5
+  action $ Add 4
+  action $ Cancel 2
+
 {-
 observeUTxOEscrow :: DL EscrowModel ()
 observeUTxOEscrow = do
@@ -652,14 +665,12 @@ observeUTxOEscrow = do
 prop_observeEscrow :: Property
 prop_observeEscrow = forAllDL observeUTxOEscrow prop_Escrow
 
-
 prop_Check :: QC.Property
 prop_Check = QC.withMaxSuccess 1 $ forAllDL simpleVestTest prop_MultiSig
 -}
 
 prop_Check :: Property
 prop_Check = forAllDL simpleVestTest prop_MultiSig
-
 
 {-
 finishEscrow :: DL EscrowModel ()
@@ -731,33 +742,33 @@ tests =
     [ checkPredicateOptions
         options
         "can start"
-        ( hasValidatedTransactionCountOfTotal 1 1 
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
+        ( hasValidatedTransactionCountOfTotal 1 1
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1)))
+        )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
-		  
+          act $ Start 1 (Ada.adaValueOf 100)
     , checkPredicateOptions
         options
         "can propose"
         ( hasValidatedTransactionCountOfTotal 2 2
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             .&&. walletFundsChange (walletAddress w2) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
-          --act $ Start 2 (Ada.adaValueOf 100 <> (assetClassValue tt 1))
+          act $ Start 1 (Ada.adaValueOf 100)
+          -- act $ Start 2 (Ada.adaValueOf 100 <> (assetClassValue tt 1))
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
     , checkPredicateOptions
         options
         "can add"
         ( hasValidatedTransactionCountOfTotal 4 4
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1)))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
-        
+        )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Start 1 (Ada.adaValueOf 100)
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 4
           act $ Add 5
@@ -765,12 +776,12 @@ tests =
         options
         "can pay"
         ( hasValidatedTransactionCountOfTotal 5 5
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1))
             .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Start 1 (Ada.adaValueOf 100)
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 5
           act $ Add 4
@@ -779,12 +790,12 @@ tests =
         options
         "can cancel"
         ( hasValidatedTransactionCountOfTotal 7 7
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) )) -- <> Value.singleton currC tnC (-1)))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1)))
             -- .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
-        
+        )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Start 1 (Ada.adaValueOf 100)
           act $ Propose 2 (Ada.adaValueOf 10) 3 1596059095001
           act $ Add 4
           act $ Add 4
@@ -795,13 +806,13 @@ tests =
         options
         "can double pay"
         ( hasValidatedTransactionCountOfTotal 9 9
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1))
             .&&. walletFundsChange (walletAddress w2) (Value.adaValueOf 30)
             .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Start 1 (Ada.adaValueOf 100)
           act $ Propose 2 (Ada.adaValueOf 10) 3 12345
           act $ Add 4
           act $ Add 5
@@ -814,21 +825,21 @@ tests =
         options
         "can close"
         ( hasValidatedTransactionCountOfTotal 6 6
-            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100) ) -- <> Value.singleton currC tnC (-1))
+            .&&. walletFundsChange (walletAddress w1) (Value.adaValueOf (-100)) -- <> Value.singleton currC tnC (-1))
             .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 97)
             -- .&&. walletFundsChange (walletAddress w3) (Value.adaValueOf 10)
             -- .&&. walletFundsChange (walletAddress w3) mempty
         )
         $ do
-          act $ Start 1 (Ada.adaValueOf 100) 
+          act $ Start 1 (Ada.adaValueOf 100)
           act $ Propose 2 (Ada.adaValueOf 97) 3 12345
           act $ Add 4
           act $ Add 5
           act $ Pay 3
-          act $ Close 4		  
-	, testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig		  
-	, testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check) 
-    --, testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction  
+          act $ Close 4
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 1000 prop_MultiSig
+    , testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check)
+    -- , testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction
     ]
 
 {-    , testProperty "QuickCheck double satisfaction fails" $
@@ -860,29 +871,18 @@ checkPropMultiSigWithCoverage = do
     E.quickCheckWithCoverage QC.stdArgs options $ QC.withMaxSuccess 100 . E.propRunActionsWithOptions
   writeCoverageReport "MultiSig" cr
 
-
 {-
-
-
 
 {-
 curSlot <- viewModelState currentSlot
       let deadline = toSlotNo . TimeSlot.posixTimeToEnclosingSlot lottoSlotConfig
                      $ TimeSlot.nominalDiffTimeToPOSIXTime (duration lottoSetup)-}
 
-
-
-
-  
 {-
 instance RunModel MultiSigModel E.EmulatorM where
   perform _ cmd _ = lift $ voidCatch $ act cmd-}
 
 voidCatch m = catchError (void m) (\ _ -> pure ())
-
-
-
-
 
 -}
 
@@ -1002,7 +1002,7 @@ import Test.QuickCheck.DynamicLogic qualified as QCD
 
 {-
 curr :: CurrencySymbol
-curr = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e" 
+curr = "c7c9864fcc779b5573d97e3beefe5dd3705bbfe41972acd9bb6ebe9e"
 
 tn :: TokenName
 tn = "ThreadToken"
