@@ -48,6 +48,8 @@ module Plutus.Examples.MultiSig (
   -- * testing
   writeSMValidator,
   test,
+  test2,
+  perhaps,
 ) where
 
 import Control.Lens (makeClassyPrisms)
@@ -525,8 +527,24 @@ modelParams' =
 aaaaa :: PlutusTx.CompiledCode (Params -> State -> Input -> ScriptContext -> Bool)
 aaaaa = $$(PlutusTx.compile [||mkValidator||])
 
+ccode :: PlutusTx.CompiledCode (State -> Input -> ScriptContext -> Bool)
+ccode =
+  $$( PlutusTx.compile
+        [||\params' -> mkValidator params'||]
+    )
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode plcVersion110 modelParams'
+
 test :: SerialisedScript
-test = serialiseCompiledCode aaaaa
+test = serialiseCompiledCode ccode
+
+test2 :: SerialisedScript
+test2 = serialiseCompiledCode aaaaa
+
+bbbbb :: C.PlutusScript C.PlutusScriptV3
+bbbbb = C.PlutusScriptSerialised test
+
+perhaps :: IO ()
+perhaps = void $ C.writeFileTextEnvelope "bingo2.plutus" Nothing bbbbb
 
 testValidator :: V3.Validator
 testValidator = Scripts.validatorScript (smTypedValidator modelParams')
