@@ -99,6 +99,7 @@ library
     , quickcheck-contractmodel
     , quickcheck-dynamic
     , quickcheck-threatmodel
+    , serialise
     , sop-core
     , tasty
     , tasty-hunit
@@ -115,8 +116,6 @@ test-suite cardano-node-emulator-test
   other-modules:
     Cardano.Node.Emulator.GeneratorsSpec
     Cardano.Node.Emulator.MTLSpec
-  --  Plutus.CIP1694.Scripts
-  --  Plutus.CIP1694.Test
     Plutus.Examples.Escrow
     Plutus.Examples.EscrowSpec
     Plutus.Examples.Game
@@ -125,6 +124,8 @@ test-suite cardano-node-emulator-test
     Plutus.Examples.MultiSigAPI
     Plutus.Examples.MultiSigSpec
 
+  --  Plutus.CIP1694.Scripts
+  --  Plutus.CIP1694.Test
   -- The limitation of plutus-tx-plugin
   if (impl(ghc <9.6) || impl(ghc >=9.7))
     buildable: False
@@ -142,10 +143,10 @@ test-suite cardano-node-emulator-test
   --------------------------
   build-depends:
     , cardano-api:{cardano-api, gen, internal}  ^>=8.42
+    , plutus-core                               >=1.0.0
     , plutus-ledger-api                         >=1.0.0
     , plutus-tx                                 >=1.0.0
     , plutus-tx-plugin                          >=1.0.0
-    , plutus-core                               >=1.0.0
 
   ------------------------
   -- Non-IOG dependencies
@@ -162,6 +163,7 @@ test-suite cardano-node-emulator-test
     , QuickCheck
     , quickcheck-contractmodel
     , quickcheck-dynamic
+    , serialise
     , tasty
     , tasty-golden
     , tasty-hedgehog

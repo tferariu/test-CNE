@@ -190,9 +190,11 @@ mkStartTx params wallet v = do
   --   asdf = toAssetId uO
   --   asdd = toAssetId unspentOutputs
   -- this is probably wrong, but find some way to get a single utxo out
+
   {-
    when (True)
-     $ throwError $ E.CustomError $ ("Actually: " ++ show minAdaTxOutEstimated ++ " and " ++ show tin) -- ("found no SM but: " ++ (show unspentOutputs)) -}
+      $ throwError $ E.CustomError $ ("Actually: " ++ show minAdaTxOutEstimated ++ " and " ++ show params)
+      -- ("found no SM but: " ++ (show unspentOutputs)) -}
 
   let utxos = Map.toList (C.unUTxO unspentOutputs)
 

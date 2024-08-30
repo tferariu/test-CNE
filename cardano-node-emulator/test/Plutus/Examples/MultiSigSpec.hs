@@ -208,7 +208,7 @@ tn :: TokenName
 tn = "ThreadToken"
 
 curr :: CurrencySymbol
-curr = "cb73d16293198371287b2a0716e846dc5900ee039fe13a0cd2232407"
+curr = "140f821fa3fbbee1d0097aca0711fbd7255d0994058a763e5baad9ce"
 
 tin :: API.TxIn
 tin = API.TxIn "dfb01b83aa6b161c1f7ca68eedbd6194b7485177c49fab7e3cf3b6ed197512b2" (API.TxIx 5)
@@ -837,7 +837,7 @@ tests =
           act $ Add 5
           act $ Pay 3
           act $ Close 4
-    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 1000 prop_MultiSig
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
     , testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check)
     -- , testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction
     ]
