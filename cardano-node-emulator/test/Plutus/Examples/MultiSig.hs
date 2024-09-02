@@ -49,7 +49,8 @@ module Plutus.Examples.MultiSig (
   writeSMValidator,
   test,
   test2,
-  perhaps,
+  writeCcode,
+  writeCcodePar,
 ) where
 
 import Control.Lens (makeClassyPrisms)
@@ -524,11 +525,11 @@ modelParams' =
     , nr = 2
     }
 
-aaaaa :: PlutusTx.CompiledCode (Params -> State -> Input -> ScriptContext -> Bool)
-aaaaa = $$(PlutusTx.compile [||mkValidator||])
+ccode :: PlutusTx.CompiledCode (Params -> State -> Input -> ScriptContext -> Bool)
+ccode = $$(PlutusTx.compile [||mkValidator||])
 
-ccode :: PlutusTx.CompiledCode (State -> Input -> ScriptContext -> Bool)
-ccode =
+ccodePar :: PlutusTx.CompiledCode (State -> Input -> ScriptContext -> Bool)
+ccodePar =
   $$( PlutusTx.compile
         [||\params' -> mkValidator params'||]
     )
@@ -538,13 +539,19 @@ test :: SerialisedScript
 test = serialiseCompiledCode ccode
 
 test2 :: SerialisedScript
-test2 = serialiseCompiledCode aaaaa
+test2 = serialiseCompiledCode ccodePar
 
-bbbbb :: C.PlutusScript C.PlutusScriptV3
-bbbbb = C.PlutusScriptSerialised test
+serialisedNP :: C.PlutusScript C.PlutusScriptV3
+serialisedNP = C.PlutusScriptSerialised test
 
-perhaps :: IO ()
-perhaps = void $ C.writeFileTextEnvelope "bingo2.plutus" Nothing bbbbb
+serialisedPar :: C.PlutusScript C.PlutusScriptV3
+serialisedPar = C.PlutusScriptSerialised test2
+
+writeCcode :: IO ()
+writeCcode = void $ C.writeFileTextEnvelope "ccode.plutus" Nothing serialisedNP
+
+writeCcodePar :: IO ()
+writeCcodePar = void $ C.writeFileTextEnvelope "ccodePar.plutus" Nothing serialisedPar
 
 testValidator :: V3.Validator
 testValidator = Scripts.validatorScript (smTypedValidator modelParams')
@@ -559,7 +566,7 @@ smsv2 :: C.PlutusScript C.PlutusScriptV3
 smsv2 = C.PlutusScriptSerialised shortSMS
 
 writeSMValidator :: IO ()
-writeSMValidator = void $ C.writeFileTextEnvelope "bingo.plutus" Nothing smsv2
+writeSMValidator = void $ C.writeFileTextEnvelope "whole.plutus" Nothing smsv2
 
 {-
 writeSMValidator :: Bool
