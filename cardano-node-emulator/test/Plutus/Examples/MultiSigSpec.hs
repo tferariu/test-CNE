@@ -208,7 +208,7 @@ tn :: TokenName
 tn = "ThreadToken"
 
 curr :: CurrencySymbol
-curr = "140f821fa3fbbee1d0097aca0711fbd7255d0994058a763e5baad9ce"
+curr = "8da8fc80c64e520d0788308333a1fea780c2e5e0cb9baa28ed4d0643"
 
 tin :: API.TxIn
 tin = API.TxIn "dfb01b83aa6b161c1f7ca68eedbd6194b7485177c49fab7e3cf3b6ed197512b2" (API.TxIx 5)
@@ -410,7 +410,7 @@ instance ContractModel MultiSigModel where
                     <$> choose ((Ada.getLovelace Ledger.minAdaTxOutEstimated), valueOf amount Ada.adaSymbol Ada.adaToken)
                 )
             <*> genWallet
-            <*> chooseInteger (timeInt, timeInt + 1000)
+            <*> chooseInteger (timeInt, timeInt + 10000)
         )
       , (5, Add <$> genWallet)
       , (3, Pay <$> genWallet)
@@ -837,14 +837,14 @@ tests =
           act $ Add 5
           act $ Pay 3
           act $ Close 4
-    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 prop_MultiSig
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 300 (QC.noShrinking prop_MultiSig)
     , testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check)
     -- , testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction
     ]
 
 {-    , testProperty "QuickCheck double satisfaction fails" $
         QC.expectFailure (QC.noShrinking prop_MultiSig_DoubleSatisfaction)-}
-
+-- QC.verbose
 {-
 
 [

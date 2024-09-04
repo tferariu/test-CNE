@@ -224,14 +224,14 @@ info ctx = scriptContextTxInfo ctx
 {-# INLINEABLE ownInput #-}
 ownInput :: ScriptContext -> TxOut
 ownInput ctx = case findOwnInput ctx of
-  Nothing -> traceError "state input missing"
+  Nothing -> error ()
   Just i -> txInInfoResolved i
 
 {-# INLINEABLE ownOutput #-}
 ownOutput :: ScriptContext -> TxOut
 ownOutput ctx = case getContinuingOutputs ctx of
   [o] -> o
-  _ -> traceError "expected exactly one SM output"
+  _ -> error ()
 
 {-# INLINEABLE stopsCont #-}
 stopsCont :: ScriptContext -> Bool
@@ -248,9 +248,9 @@ smDatum md = do
 {-# INLINEABLE outputDatum #-}
 outputDatum :: ScriptContext -> State
 outputDatum ctx = case txOutDatum (ownOutput ctx) of
-  NoOutputDatum -> traceError "nt"
+  NoOutputDatum -> error ()
   OutputDatumHash dh -> case smDatum $ findDatum dh (scriptContextTxInfo ctx) of
-    Nothing -> traceError "hs"
+    Nothing -> error ()
     Just d -> d
   OutputDatum d -> PlutusTx.unsafeFromBuiltinData (getDatum d)
 
@@ -374,10 +374,10 @@ agdaValidator param oldLabel red ctx
 mkValidator :: Params -> State -> Input -> ScriptContext -> Bool
 mkValidator param st red ctx =
   (getVal (ownInput ctx) (tToken st) == 1)
-    && traceIfFalse "fv" (agdaValidator param (label st) red ctx)
+    && (agdaValidator param (label st) red ctx)
     && ( case red of
-          Close -> traceIfFalse "nS" (stopsCont ctx)
-          _ -> traceIfFalse "tmo" (getVal (ownOutput ctx) (tToken st) == 1)
+          Close -> (stopsCont ctx)
+          _ -> (getVal (ownOutput ctx) (tToken st) == 1)
        )
 
 -- traceIfFalse "token missing from output" ((stopsCont ctx) || (getVal (ownOutput ctx) (tToken st) == 1)) &&
@@ -402,11 +402,11 @@ mkOtherAddress = V3.validatorAddress . smTypedValidator
 mkPolicy :: Address -> TxOutRef -> TokenName -> () -> ScriptContext -> Bool
 mkPolicy addr oref tn () ctx
   | amt == 1 =
-      traceIfFalse "nU" hasUTxO
-        && traceIfFalse "nI" checkDatum
-        && traceIfFalse "nD" checkValue
-  | amt == -1 = traceIfFalse "contract not stopped" noOutput
-  | otherwise = traceError "wO"
+      hasUTxO
+        && checkDatum
+        && checkValue
+  | amt == -1 = noOutput
+  | otherwise = error ()
   where
     {-
     case checkMintedAmount of
@@ -454,17 +454,17 @@ mkPolicy addr oref tn () ctx
     scriptOutput :: TxOut
     scriptOutput = case filter (\i -> (txOutAddress i == (addr))) (txInfoOutputs info) of
       [o] -> o
-      _ -> traceError "nU"
+      _ -> error ()
 
     checkDatum :: Bool
     checkDatum = case txOutDatum scriptOutput of
-      NoOutputDatum -> traceError "nd"
+      NoOutputDatum -> error ()
       OutputDatumHash dh -> case smDatum $ findDatum dh info of
-        Nothing -> traceError "nh"
+        Nothing -> error ()
         Just d -> tToken d == AssetClass (cs, tn) && label d == Holding
       OutputDatum dat -> case PlutusTx.unsafeFromBuiltinData @State (getDatum dat) of
         d -> tToken d == AssetClass (cs, tn) && label d == Holding
-        _ -> traceError "?"
+        _ -> error ()
 
     checkValue :: Bool
     checkValue = valueOf (txOutValue scriptOutput) cs tn == 1
