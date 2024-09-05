@@ -51,6 +51,16 @@ module Plutus.Examples.MultiSig (
   test2,
   writeCcode,
   writeCcodePar,
+  ccode,
+  ccodePar,
+  goldenPirReadable,
+  runTestNested,
+  runTestNestedIn,
+  printPir,
+  toUPlc,
+  getPlcNoAnn,
+  writePir,
+  writeUplc,
 ) where
 
 import Control.Lens (makeClassyPrisms)
@@ -69,7 +79,7 @@ import PlutusTx.Coverage (CoverageIndex)
 -- import PlutusTx.Prelude ()
 -- import PlutusTx.Prelude qualified as PlutusTx
 import PlutusTx.Prelude
-import Prelude (IO, Show (..), String)
+import Prelude (IO, Show (..), String, writeFile)
 
 import Cardano.Node.Emulator qualified as E
 import Cardano.Node.Emulator.Internal.Node (
@@ -116,6 +126,29 @@ import Ledger (minAdaTxOutEstimated)
 import Plutus.Script.Utils.Ada qualified as Ada
 import PlutusCore.Version (plcVersion110)
 
+import PlutusCore.Test
+import PlutusTx.Test
+import Test.Tasty.Extras
+
+-- (prettyPirReadableSimple)
+
+import Control.Exception
+import Control.Lens (Getting, traverseOf, view)
+import Control.Monad.Except (ExceptT, catchError, liftEither, runExceptT, throwError, withExceptT)
+import Flat (Flat)
+import PlutusCore qualified as PLC
+import PlutusCore.Builtin qualified as PLC
+import PlutusCore.Pretty
+import PlutusCore.Pretty qualified as PLC
+import PlutusIR.Core.Instance.Pretty.Readable
+import PlutusIR.Core.Type (progTerm)
+import PlutusTx.Code (CompiledCode, CompiledCodeIn, getPir, getPirNoAnn, getPlcNoAnn, sizePlc)
+import Prettyprinter qualified
+import Test.Tasty.Extras (TestNested, nestedGoldenVsDoc, testNested)
+import UntypedPlutusCore qualified as UPLC
+import UntypedPlutusCore.Evaluation.Machine.Cek qualified as UPLC
+
+{--}
 {-
 import PlutusLedgerApi.V2.Tx (OutputDatum (OutputDatum))
 import PlutusLedgerApi.V3 (Datum (Datum))
@@ -270,6 +303,17 @@ newValue ctx = justLovelace (txOutValue (ownOutput ctx) <> (negate minValue))
 expired :: Deadline -> ScriptContext -> Bool
 expired d ctx = Interval.before ((POSIXTime{getPOSIXTime = d})) (txInfoValidRange (scriptContextTxInfo ctx))
 
+{-
+
+To ensure that a deadline (I assume it's store din a datum for the next validator) is at most a week from now on chain you need:
+Put an upper bound on the transaction t_max and check t_max + (7*24*60*60*1000) = deadline
+Put a lower bound on the transaction t_min and check that t_max - t_min is within a reasonable time frame, e.g. 1 hour: t_max - t_min < (60*60*1000)
+Off-chain you then need to select an upper bound slot and compute the offset (1 week) of it, which you can then use as a deadline in the datum.
+This will result in a deadline being maximum 1 week + 1 hour away from now
+
+asdf :: POSIXTime
+asdf = getPOSIXTime
+-}
 {-# INLINEABLE checkSigned #-}
 checkSigned :: PaymentPubKeyHash -> ScriptContext -> Bool
 checkSigned pkh ctx = txSignedBy (scriptContextTxInfo ctx) (unPaymentPubKeyHash pkh)
@@ -567,6 +611,30 @@ smsv2 = C.PlutusScriptSerialised shortSMS
 
 writeSMValidator :: IO ()
 writeSMValidator = void $ C.writeFileTextEnvelope "whole.plutus" Nothing smsv2
+
+printPir :: PlutusTx.CompiledCode a -> Doc b
+printPir c = (prettyPirReadable (view progTerm (fromJust (getPirNoAnn c))))
+
+writePir :: IO ()
+writePir = writeFile "pir.txt" (show (printPir ccode))
+
+writeUplc :: IO ()
+writeUplc = writeFile "uplc.txt" (show (getPlcNoAnn ccode))
+
+{-
+printUplc :: PlutusTx.CompiledCode a -> Doc b
+printUplc c = withExceptT @_ @UPLC.FreeVariableError toException $ traverseOf UPLC.progTerm UPLC.deBruijnTerm (runExceptT (toUPlc c))
+-}
+{-
+goldenPirReadable ::
+  (PrettyUni uni, Pretty fun, uni `PLC.Everywhere` Flat, Flat fun) =>
+  String ->
+  CompiledCodeIn uni fun a ->
+  TestNested
+goldenPirReadable name value =
+  nestedGoldenVsDoc name ".pir"
+    . maybe "PIR not found in CompiledCode" (prettyPirReadable . view progTerm)
+    $ getPirNoAnn value-}
 
 {-
 writeSMValidator :: Bool
