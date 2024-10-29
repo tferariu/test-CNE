@@ -15,7 +15,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -g -fplugin-opt PlutusTx.Plugin:coverage-all #-}
+
+-- {-# OPTIONS_GHC -g -fplugin-opt PlutusTx.Plugin:coverage-all #-}
 
 -- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:conservative-optimisation #-}
 
@@ -46,22 +47,23 @@ module Plutus.Examples.MultiSig (
   covIdx,
 
   -- * testing
-  writeSMValidator,
-  test,
-  test2,
-  writeCcode,
-  writeCcodePar,
-  ccode,
-  ccodePar,
-  goldenPirReadable,
-  runTestNested,
-  runTestNestedIn,
-  printPir,
-  toUPlc,
-  getPlcNoAnn,
-  writePir,
-  writeUplc,
 ) where
+
+-- writeSMValidator,
+-- test,
+-- test2,
+-- writeCcode,
+-- writeCcodePar,
+-- ccode,
+-- ccodePar,
+-- goldenPirReadable,
+-- runTestNested,
+-- runTestNestedIn,
+-- printPir,
+-- toUPlc,
+-- getPlcNoAnn,
+-- writePir,
+-- writeUplc,
 
 import Control.Lens (makeClassyPrisms)
 import Control.Monad (void)
@@ -569,6 +571,7 @@ modelParams' =
     , nr = 2
     }
 
+{-
 ccode :: PlutusTx.CompiledCode (Params -> State -> Input -> ScriptContext -> Bool)
 ccode = $$(PlutusTx.compile [||mkValidator||])
 
@@ -619,7 +622,7 @@ writePir :: IO ()
 writePir = writeFile "pir.txt" (show (printPir ccode))
 
 writeUplc :: IO ()
-writeUplc = writeFile "uplc.txt" (show (getPlcNoAnn ccode))
+writeUplc = writeFile "uplc.txt" (show (getPlcNoAnn ccode)) -}
 
 {-
 printUplc :: PlutusTx.CompiledCode a -> Doc b

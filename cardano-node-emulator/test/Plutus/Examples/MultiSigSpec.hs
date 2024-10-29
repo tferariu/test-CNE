@@ -208,7 +208,7 @@ tn :: TokenName
 tn = "ThreadToken"
 
 curr :: CurrencySymbol
-curr = "8da8fc80c64e520d0788308333a1fea780c2e5e0cb9baa28ed4d0643"
+curr = "88171b30e0d601ef720e07ac5898990d428f34eada0c2f951c709e10"
 
 tin :: API.TxIn
 tin = API.TxIn "dfb01b83aa6b161c1f7ca68eedbd6194b7485177c49fab7e3cf3b6ed197512b2" (API.TxIx 5)
