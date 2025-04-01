@@ -24,6 +24,8 @@ The repository consists of a set of components:
 
 Run `nix develop` to enter the development shell and you will be presented with a list of available commands.
 
+To access existing tests `cabal build all`, then `cabal run cardano-node-emulator`
+
 **Please see link:CONTRIBUTING{outfilesuffix}[CONTRIBUTING] for comprehensive documentation on how to contribute to the project, including development and submitting changes*
 
 == Documentation

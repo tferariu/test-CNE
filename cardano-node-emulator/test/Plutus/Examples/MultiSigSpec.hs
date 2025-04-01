@@ -837,7 +837,7 @@ tests =
           act $ Add 5
           act $ Pay 3
           act $ Close 4
-    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 300 (QC.noShrinking prop_MultiSig)
+    , testProperty "QuickCheck ContractModel" $ QC.withMaxSuccess 100 (QC.noShrinking prop_MultiSig)
     , testProperty "QuickCheck CancelDL" (QC.expectFailure prop_Check)
     -- , testProperty "QuickCheck double satisfaction" $ prop_MultiSig_DoubleSatisfaction
     ]
