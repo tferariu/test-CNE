@@ -116,6 +116,7 @@ test-suite cardano-node-emulator-test
   other-modules:
     Cardano.Node.Emulator.GeneratorsSpec
     Cardano.Node.Emulator.MTLSpec
+    Plutus.Examples.AccountSim
     Plutus.Examples.Escrow
     Plutus.Examples.EscrowSpec
     Plutus.Examples.Game
